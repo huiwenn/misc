@@ -174,7 +174,11 @@ class ECCONetwork(nn.Module):
             if other_feats is None:
                 feats = v0_enc
             else:
-                feats = torch.cat((other_feats, v0_enc), -2)
+                print(other_feats.shape)
+                print(v0_enc.shape)
+                # TODO: can i do this??
+                flat_feat = torch.flatten(other_feats, start_dim=1)
+                feats = torch.cat((flat_feat, v0_enc), -2)
         else:
             if other_feats is None:
                 feats = v0_enc
