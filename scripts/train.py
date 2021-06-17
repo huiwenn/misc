@@ -192,8 +192,11 @@ def train():
             for k in ['car_mask', 'lane_mask']:
                 batch_tensor[k] = torch.tensor(np.stack(batch[k]), dtype=torch.float32, device=device).unsqueeze(-1)
 
-            for k in ['track_id' + str(i) for i in range(31)] + ['city']:
-                batch_tensor[k] = batch[k]
+            track_id = np.stack(batch['track_id'])
+            for k in range(30):
+                batch_tensor['track_id' + str(k)] = track_id[:, k, :]
+
+            batch_tensor['city'] = batch['city']
 
             batch_tensor['car_mask'] = batch_tensor['car_mask'].squeeze(-1)
             accel = torch.zeros(batch_size, 1, 2).to(device)
