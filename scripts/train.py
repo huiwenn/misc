@@ -49,6 +49,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = args.cuda_visible_devices
 model_name = args.model_name
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print("using device", device)
 
 val_path = os.path.join(args.dataset_path, 'val', 'lane_data')
 train_path = os.path.join(args.dataset_path, 'train', 'lane_data')
