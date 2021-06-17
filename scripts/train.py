@@ -203,7 +203,7 @@ def train():
             batch_tensor['accel'] = accel
 
             # batch sigmas: starting with two zero 2x2 matrices
-            batch_tensor['sigmas'] = torch.zeros((4,2))
+            batch_tensor['sigmas'] = torch.zeros(batch_size, 60, 4, 2).to(device)
             del batch
 
             data_fetch_latency = time.time() - data_fetch_start
