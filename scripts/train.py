@@ -156,13 +156,14 @@ def train():
     min_loss = None
 
     for i in range(epochs):
+        print("training ... epoch " + str(i + 1), end='')
+
         epoch_start_time = time.time()
 
-        model.train()
+        # model.train()
         epoch_train_loss = 0 
         sub_idx = 0
 
-        print("training ... epoch " + str(i + 1), end='')
         for batch_itr in range(batches_per_epoch * args.batch_divide):
 
             data_fetch_start = time.time()
