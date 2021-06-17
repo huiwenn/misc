@@ -96,7 +96,9 @@ def train():
     model = MyDataParallel(model)
     optimizer = torch.optim.Adam(model.parameters(), args.base_lr,betas=(0.9, 0.999), weight_decay=4e-4)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size= 1, gamma=0.95)
-    
+
+    print('loaded datasets, starting training')
+
     def train_one_batch(model, batch, train_window=2):
 
         batch_size = args.batch_size
