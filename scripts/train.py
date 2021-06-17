@@ -194,7 +194,7 @@ def train():
 
             track_id = np.stack(batch['track_id'])
             for k in range(30):
-                batch_tensor['track_id' + str(k)] = torch.tensor(track_id[:, k, :], dtype=torch.float32, device=device)
+                batch_tensor['track_id' + str(k)] = track_id[:, k, :].unsqueeze(-1)
 
             batch_tensor['city'] = batch['city']
 
