@@ -186,15 +186,15 @@ def train():
             p_out = np.stack(batch['p_out'])
             v_out = np.stack(batch['v_out'])
             for k in range(args.train_window + 1):
-                batch_tensor['pos' + str(k)] = p_out[:, k, :]
-                batch_tensor['vel' + str(k)] = v_out[:, k, :]
+                batch_tensor['pos' + str(k)] = torch.tensor(p_out[:, k, :], dtype=torch.float32, device=device)
+                batch_tensor['vel' + str(k)] = torch.tensor(v_out[:, k, :], dtype=torch.float32, device=device)
 
             for k in ['car_mask', 'lane_mask']:
                 batch_tensor[k] = torch.tensor(np.stack(batch[k]), dtype=torch.float32, device=device).unsqueeze(-1)
 
             track_id = np.stack(batch['track_id'])
             for k in range(30):
-                batch_tensor['track_id' + str(k)] = track_id[:, k, :]
+                batch_tensor['track_id' + str(k)] = torch.tensor(track_id[:, k, :], dtype=torch.float32, device=device)
 
             batch_tensor['city'] = batch['city']
 

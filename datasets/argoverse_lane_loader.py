@@ -71,7 +71,6 @@ def cat_key(data, key):
 
 def dict_collate_func(data):
     keys = data[0].keys()
-    print(keys)
     data = {key: cat_key(data, key) for key in keys}
     return data
 
