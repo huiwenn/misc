@@ -113,14 +113,14 @@ def train():
             batch['car_mask'], batch['lane_mask']
         ])
 
-        # print_inputs_shape(inputs)
-        # print(batch['pos0'])
+        print_inputs_shape(inputs)
+        print(batch['pos0'])
         pr_pos1, pr_vel1, pr_m1, states = model(inputs)
         gt_pos1 = batch['pos1']
-        # print(pr_pos1)
+        print(pr_pos1)
 
         losses = nll(pr_pos1, gt_pos1, pr_m1, batch['car_mask'].squeeze(-1))
-
+        print(losses)
         del gt_pos1
         pos0 = batch['pos0']
         vel0 = batch['vel0']
