@@ -106,7 +106,7 @@ def train():
         batch_size = args.batch_size
 
         inputs = ([
-            batch['pos_2s'], batch['vel_2s'], 
+            batch['p_in'], batch['v_in'],
             batch['pos0'], batch['vel0'], 
             batch['accel'], batch['sigmas'], #other feats: 4x2 two M matrices
             batch['lane'], batch['lane_norm'], 
