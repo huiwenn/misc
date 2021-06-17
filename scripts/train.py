@@ -113,7 +113,7 @@ def train():
             batch['car_mask'], batch['lane_mask']
         ])
 
-        print_inputs_shape(inputs)
+        # print_inputs_shape(inputs)
         print(batch['pos0'])
         pr_pos1, pr_vel1, pr_m1, states = model(inputs)
         gt_pos1 = batch['pos1']
@@ -154,7 +154,8 @@ def train():
     valid_losses = []
     valid_metrics_list = []
     min_loss = None
-
+    print('hello')
+    
     for i in range(epochs):
         print("training ... epoch " + str(i + 1), end='')
 
