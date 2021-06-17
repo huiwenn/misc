@@ -61,7 +61,11 @@ class ArgoverseDataset(IterableDataset):
 def cat_key(data, key):
     result = []
     for d in data:
-        result = result + [d[key]]
+        toappend = d[key]
+        if not isinstance(toappend,list):
+            result += [toappend]
+        else:
+            result += toappend
     return result
 
 
