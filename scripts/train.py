@@ -155,11 +155,9 @@ def train():
     valid_metrics_list = []
     min_loss = None
     print('hello')
-    for i in range(epochs):
-        print(i)
-    for i in range(epochs):
-        print("training ... epoch " + str(i + 1), end='')
 
+    for i in range(epochs):
+        print("training ... epoch " + str(i + 1))
         epoch_start_time = time.time()
 
         model.train()
@@ -174,7 +172,7 @@ def train():
             if sub_idx == 0:
                 optimizer.zero_grad()
                 if (batch_itr // args.batch_divide) % 25 == 0:
-                    print("... batch " + str((batch_itr // args.batch_divide) + 1), end='', flush=True)
+                    print("... batch " + str((batch_itr // args.batch_divide) + 1), flush=True)
             sub_idx += 1
             
             batch_size = len(batch['pos0'])
