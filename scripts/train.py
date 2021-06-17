@@ -95,7 +95,7 @@ def train():
     
     # model_ = torch.load(model_name + '.pth')
     # model = model_
-    model = MyDataParallel(model)
+    # model = MyDataParallel(model) disabling parallel for now
     optimizer = torch.optim.Adam(model.parameters(), args.base_lr,betas=(0.9, 0.999), weight_decay=4e-4)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size= 1, gamma=0.95)
 
