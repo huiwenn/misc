@@ -155,13 +155,14 @@ def train():
     valid_metrics_list = []
     min_loss = None
     print('hello')
-    
+    for i in range(epochs):
+        print(i)
     for i in range(epochs):
         print("training ... epoch " + str(i + 1), end='')
 
         epoch_start_time = time.time()
 
-        # model.train()
+        model.train()
         epoch_train_loss = 0 
         sub_idx = 0
 
