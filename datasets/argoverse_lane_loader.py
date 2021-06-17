@@ -61,7 +61,7 @@ class ArgoverseDataset(IterableDataset):
 def cat_key(data, key):
     result = []
     for d in data:
-        result = result + d[key]
+        result = result + [d[key]]
     return result
 
 
