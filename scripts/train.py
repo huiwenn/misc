@@ -195,7 +195,7 @@ def train():
             track_id = np.stack(batch['track_id'])
             for k in range(30):
                 batch_tensor['track_id' + str(k)] = track_id[:, k, :]
-                
+
             batch_tensor['city'] = batch['city']
 
             batch_tensor['car_mask'] = batch_tensor['car_mask'].squeeze(-1)
