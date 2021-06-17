@@ -123,7 +123,6 @@ class ECCONetwork(nn.Module):
 
         fluid_feats = [v.unsqueeze(-2)]
         if not other_feats is None:
-            print(len(fluid_feats))
             print(fluid_feats[0].shape)
             print(other_feats.shape)
             fluid_feats.append(other_feats)
@@ -187,6 +186,8 @@ class ECCONetwork(nn.Module):
         # print(feats.shape)
 
         # a = (v0 - v0_enc[...,-1,:]) / self.timestep
+        print("p0", p0.shape)
+        print("v0", v0.shape)
         p1, v1 = self.update_pos_vel(p0, v0, a)
         pos_correction = self.compute_correction(p1, v1, feats, box, box_feats, fluid_mask, box_mask)
 
