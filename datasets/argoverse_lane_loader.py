@@ -81,6 +81,5 @@ def read_pkl_data(data_path: str, batch_size: int,
                 yield data
     else:
         for data in loader:
-            print(data.shape)
             yield data
             
