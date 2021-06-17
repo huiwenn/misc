@@ -174,17 +174,19 @@ def train():
                     print("... batch " + str((batch_itr // args.batch_divide) + 1)) #, flush=True)
             sub_idx += 1
             
-            batch_size = len(batch['pos0'])
+            batch_size = len(batch['city'])
 
             batch['lane_mask'] = [np.array([0])] * args.batch_size
 
             batch_tensor = {}
-            convert_keys = (['pos' + str(i) for i in range(args.train_window + 1)] + 
-                            ['vel' + str(i) for i in range(args.train_window + 1)] + 
-                            ['pos_2s', 'vel_2s', 'lane', 'lane_norm'])
 
-            for k in convert_keys:
+            for k in ['p_in', 'v_in', 'lane', 'lane_norm']:
                 batch_tensor[k] = torch.tensor(np.stack(batch[k]), dtype=torch.float32, device=device)
+
+            for k in range(args.train_window + 1):
+                batch_tensor['pos' + str(k)] = batch['p_out'][:, k, :]
+                batch_tensor['vel' + str(k)] = batch['v_out'][:, k, :]
+
 
             for k in ['car_mask', 'lane_mask']:
                 batch_tensor[k] = torch.tensor(np.stack(batch[k]), dtype=torch.float32, device=device).unsqueeze(-1)
