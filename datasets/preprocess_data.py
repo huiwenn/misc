@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import sys
 sys.path.append('..')
+from datasets.argoverse_pickle_loader import read_pkl_data
 from datasets.helper import get_lane_direction
 # from tensorpack import dataflow
 import time
@@ -15,7 +16,7 @@ import glob
 from argoverse.map_representation.map_api import ArgoverseMap
 from argoverse.data_loading.argoverse_forecasting_loader import ArgoverseForecastingLoader
 
-dataset_path = '/home/leo/particle/argoverse/argoverse_forecasting'
+dataset_path = '/path/to/dataset/argoverse_forecasting/'
 
 val_path = os.path.join(dataset_path, 'val', 'data')
 train_path = os.path.join(dataset_path, 'train', 'data')
@@ -82,10 +83,10 @@ class ArgoverseTest(object):
         feat_dict['vel_2s'] = self._expand_particle(vel_enc, self.max_car_num, 0)
 
         pos = data[data['TIMESTAMP'] == tstmps[19]][['X', 'Y']].values
-        # pos = self._expand_dim(pos)
+        pos = self._expand_dim(pos)
         feat_dict['pos0'] = self._expand_particle(pos, self.max_car_num, 0)
         vel = data[data['TIMESTAMP'] == tstmps[19]][['vel_x', 'vel_y']].values
-        # vel = self._expand_dim(vel)
+        vel = self._expand_dim(vel)
         feat_dict['vel0'] = self._expand_particle(vel, self.max_car_num, 0)
         track_id =  data[data['TIMESTAMP'] == tstmps[19]]['TRACK_ID'].values
         feat_dict['track_id0'] = self._expand_particle(track_id, self.max_car_num, 0, 'str')
@@ -93,10 +94,10 @@ class ArgoverseTest(object):
         
         for t in range(31):
             pos = data[data['TIMESTAMP'] == tstmps[19 + t]][['X', 'Y']].values
-            # pos = self._expand_dim(pos)
+            pos = self._expand_dim(pos)
             feat_dict['pos' + str(t)] = self._expand_particle(pos, self.max_car_num, 0)
             vel = data[data['TIMESTAMP'] == tstmps[19 + t]][['vel_x', 'vel_y']].values
-            # vel = self._expand_dim(vel)
+            vel = self._expand_dim(vel)
             feat_dict['vel' + str(t)] = self._expand_particle(vel, self.max_car_num, 0)
             track_id =  data[data['TIMESTAMP'] == tstmps[19 + t]]['TRACK_ID'].values
             feat_dict['track_id' + str(t)] = self._expand_particle(track_id, self.max_car_num, 0, 'str')
@@ -254,7 +255,7 @@ if __name__ == '__main__':
     print("++++++++++++++++++++ START TRAIN ++++++++++++++++++++")
     train_num = len(afl_train)
     batch_start = time.time()
-    os.mkdir(os.path.join(dataset_path, 'train/lane_data2'))
+    os.mkdir(os.path.join(dataset_path, 'train/lane_data')
     for i, scene in enumerate(range(train_num)):
         if i % 1000 == 0:
             batch_end = time.time()
@@ -269,7 +270,7 @@ if __name__ == '__main__':
     print("++++++++++++++++++++ START VAL ++++++++++++++++++++")
     val_num = len(afl_val)
     batch_start = time.time()
-    os.mkdir(os.path.join(dataset_path, 'val/lane_data2'))
+    os.mkdir(os.path.join(dataset_path, 'val/lane_data')
     for i, scene in enumerate(range(val_num)):
         if i % 1000 == 0:
             batch_end = time.time() 

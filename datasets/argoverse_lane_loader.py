@@ -8,7 +8,7 @@ from torch.utils.data import IterableDataset, DataLoader
 
 
 class ArgoverseDataset(IterableDataset):
-    def __init__(self, data_path: str, transform=None, max_car=None,
+    def __init__(self, data_path: str, transform=None, 
                  max_lane_nodes=650, min_lane_nodes=0, shuffle=True):
         super(ArgoverseDataset, self).__init__()
         self.data_path = data_path
@@ -20,7 +20,6 @@ class ArgoverseDataset(IterableDataset):
             self.pkl_list.sort()
         self.max_lane_nodes = max_lane_nodes
         self.min_lane_nodes = min_lane_nodes
-        self.max_car = max_car
         
     def __len__(self):
         return len(self.pkl_list)
@@ -46,17 +45,6 @@ class ArgoverseDataset(IterableDataset):
 
             if self.transform:
                 data = self.transform(data)
-            
-            if self.max_car is not None:
-                if data['car_mask'][0].sum() > self.max_car:
-                    continue
-                else:
-                    keys = (['pos' + str(i) for i in range(31)] + 
-                            ['vel' + str(i) for i in range(31)] + 
-                            ['track_id' + str(i) for i in range(31)] + 
-                            ['pos_2s', 'vel_2s', 'car_mask'])
-                    for k in keys:
-                        data[k] = [data[k][0][:self.max_car]]
 
             yield data
     
@@ -83,10 +71,10 @@ def dict_collate_func(data):
     return data
 
 
-def read_pkl_data(data_path: str, batch_size: int, max_car = None,
+def read_pkl_data(data_path: str, batch_size: int, 
                   shuffle: bool=False, repeat: bool=False, **kwargs):
-    dataset = ArgoverseDataset(data_path=data_path, shuffle=shuffle, max_car=max_car, **kwargs)
-    loader = DataLoader(dataset, batch_size=batch_size, collate_fn=dict_collate_func)
+    dataset = ArgoverseDataset(data_path=data_path, shuffle=shuffle, **kwargs)
+    loader = DataLoader(dataset, batch_size=int(batch_size), collate_fn=dict_collate_func)
     if repeat:
         while True:
             for data in loader:
