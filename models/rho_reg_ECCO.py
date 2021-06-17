@@ -123,7 +123,8 @@ class ECCONetwork(nn.Module):
 
         fluid_feats = [v.unsqueeze(-2)]
         if not other_feats is None:
-            print(fluid_feats.shape)
+            print(len(fluid_feats))
+            print(fluid_feats[0].shape)
             print(other_feats.shape)
             fluid_feats.append(other_feats)
         fluid_feats = torch.cat(fluid_feats, -2)
