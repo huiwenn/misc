@@ -51,8 +51,8 @@ model_name = args.model_name
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("using device", device)
 
-val_path = os.path.join(args.dataset_path, 'val', 'lane_data')
-train_path = os.path.join(args.dataset_path, 'train', 'lane_data')
+val_path = os.path.join(args.dataset_path, 'val') #, 'lane_data'
+train_path = os.path.join(args.dataset_path, 'train') #, 'lane_data'
     
 def create_model():
     if args.representation:
@@ -95,7 +95,7 @@ def train():
     
     # model_ = torch.load(model_name + '.pth')
     # model = model_
-    # model = MyDataParallel(model) disabling parallel for now
+    model = MyDataParallel(model)
     optimizer = torch.optim.Adam(model.parameters(), args.base_lr,betas=(0.9, 0.999), weight_decay=4e-4)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size= 1, gamma=0.95)
 
