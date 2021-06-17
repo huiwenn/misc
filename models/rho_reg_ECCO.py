@@ -123,11 +123,11 @@ class ECCONetwork(nn.Module):
 
         fluid_feats = [v.unsqueeze(-2)]
         if not other_feats is None:
-            print(fluid_feats[0].shape)
-            print(other_feats.shape)
             fluid_feats.append(other_feats)
         fluid_feats = torch.cat(fluid_feats, -2)
-
+        
+        print('fluid feats', fluid_feats.shape)
+        print('fluid mask', fluid_mask.shape)
         # compute the correction by accumulating the output through the network layers
         output_conv_fluid = self.conv_fluid(p, p, fluid_feats, fluid_mask)
         output_dense_fluid = self.dense_fluid(fluid_feats)
@@ -186,8 +186,6 @@ class ECCONetwork(nn.Module):
         # print(feats.shape)
 
         # a = (v0 - v0_enc[...,-1,:]) / self.timestep
-        print("p0", p0.shape)
-        print("v0", v0.shape)
         p1, v1 = self.update_pos_vel(p0, v0, a)
         pos_correction = self.compute_correction(p1, v1, feats, box, box_feats, fluid_mask, box_mask)
 
