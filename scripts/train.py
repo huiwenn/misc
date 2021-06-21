@@ -31,9 +31,10 @@ parser.add_argument('--batches_per_epoch', default=600, type=int,
 parser.add_argument('--base_lr', default=0.001, type=float)
 parser.add_argument('--batch_size', default=16, type=int)
 parser.add_argument('--model_name', default='ecco_trained_model', type=str)
+parser.add_argument('--use_lane', default=False, action='store_true')
 parser.add_argument('--val_batches', default=50, type=int, 
                     help='the number of batches of data to split as validation set')
-parser.add_argument('--val_batch_size', default=32, type=int)
+parser.add_argument('--val_batch_size', default=16, type=int)
 parser.add_argument('--train', default=False, action='store_true')
 parser.add_argument('--evaluation', default=False, action='store_true')
 
@@ -60,7 +61,7 @@ def create_model():
         """Returns an instance of the network for training and evaluation"""
         model = ECCONetwork(radius_scale = 40,
                             layer_channels = [8, 16, 8, 8, 3],
-                            encoder_hidden_size=18)
+                            encoder_hidden_size=23)
     else:
         from models.rho1_ECCO import ECCONetwork
         """Returns an instance of the network for training and evaluation"""
@@ -106,35 +107,30 @@ def train():
         batch_size = args.batch_size
 
         inputs = ([
-            batch['p_in'], batch['v_in'],
+            batch['pos_2s'], batch['vel_2s'],
             batch['pos0'], batch['vel0'], 
             batch['accel'], batch['sigmas'], #other feats: 4x2 two M matrices
             batch['lane'], batch['lane_norm'], 
             batch['car_mask'], batch['lane_mask']
         ])
 
-        # print_inputs_shape(inputs)
-        # print(batch['pos0'])
         pr_pos1, pr_vel1, pr_m1, states = model(inputs)
         gt_pos1 = batch['pos1']
-        # print(pr_pos1)
 
         losses = nll(pr_pos1, gt_pos1, pr_m1, batch['car_mask'].squeeze(-1))
-        print(losses)
         del gt_pos1
         pos0 = batch['pos0']
         vel0 = batch['vel0']
-        m0 = torch.zeros((2,2))
+        m0 = torch.zeros((batch_size, 60, 2, 2), device=pos0.device)
         for i in range(train_window-1):
             pos_enc = torch.unsqueeze(pos0, 2)
             vel_enc = torch.unsqueeze(vel0, 2)
 
             inputs = (pos_enc, vel_enc, pr_pos1, pr_vel1, batch['accel'],
-                      torch.cat([m0, pr_m1]), #sigmas
+                      torch.cat([m0, pr_m1], dim=-2), 
                       batch['lane'],
                       batch['lane_norm'],batch['car_mask'], batch['lane_mask'])
-            pos0, vel0 = pr_pos1, pr_vel1
-            m0 = pr_m1
+            pos0, vel0, m0 = pr_pos1, pr_vel1, pr_m1
             # del pos_enc, vel_enc
             
             pr_pos1, pr_vel1, m_matrix, states = model(inputs, states)
@@ -156,7 +152,7 @@ def train():
     min_loss = None
 
     for i in range(epochs):
-        print("training ... epoch " + str(i + 1))
+        print("training ... epoch " + str(i + 1), end='', flush=True)
         epoch_start_time = time.time()
 
         model.train()
@@ -171,39 +167,10 @@ def train():
             if sub_idx == 0:
                 optimizer.zero_grad()
                 if (batch_itr // args.batch_divide) % 25 == 0:
-                    print("... batch " + str((batch_itr // args.batch_divide) + 1)) #, flush=True)
+                    print("... batch " + str((batch_itr // args.batch_divide) + 1), end='', flush=True)
             sub_idx += 1
             
-            batch_size = len(batch['city'])
-
-            batch['lane_mask'] = [np.array([0])] * args.batch_size
-
-            batch_tensor = {}
-
-            for k in ['p_in', 'v_in', 'lane', 'lane_norm']:
-                batch_tensor[k] = torch.tensor(np.stack(batch[k]), dtype=torch.float32, device=device)
-
-            p_out = np.stack(batch['p_out'])
-            v_out = np.stack(batch['v_out'])
-            for k in range(args.train_window + 1):
-                batch_tensor['pos' + str(k)] = torch.tensor(p_out[:, :, k, :], dtype=torch.float32, device=device)
-                batch_tensor['vel' + str(k)] = torch.tensor(v_out[:, :, k, :], dtype=torch.float32, device=device)
-
-            for k in ['car_mask', 'lane_mask']:
-                batch_tensor[k] = torch.tensor(np.stack(batch[k]), dtype=torch.float32, device=device).unsqueeze(-1)
-
-            track_id = np.stack(batch['track_id'])
-            for k in range(30):
-                batch_tensor['track_id' + str(k)] = track_id[:, k, :]
-
-            batch_tensor['city'] = batch['city']
-
-            batch_tensor['car_mask'] = batch_tensor['car_mask'].squeeze(-1)
-            accel = torch.zeros(batch_size, 1, 2).to(device)
-            batch_tensor['accel'] = accel
-
-            # batch sigmas: starting with two zero 2x2 matrices
-            batch_tensor['sigmas'] = torch.zeros(batch_size, 60, 4, 2).to(device)
+            batch_tensor = process_batch(batch, device, train_window=args.train_window)
             del batch
 
             data_fetch_latency = time.time() - data_fetch_start
@@ -224,20 +191,18 @@ def train():
             clean_cache(device)
 
             if batch_itr == batches_per_epoch - 1:
-                print("... DONE") #, flush=True)
+                print("... DONE", flush=True)
 
         train_losses.append(epoch_train_loss)
 
         model.eval()
         with torch.no_grad():
-            valid_total_loss, valid_metrics = evaluate(model.module, val_dataset, am=am, 
-                                                       train_window=args.train_window, 
+            valid_total_loss = evaluate(model.module, val_dataset, 
                                                        max_iter=args.val_batches, 
                                                        device=device, use_lane=args.use_lane, 
-                                                       batch_size=val_dataset.batch_size)
+                                                       batch_size=args.val_batch_size)
 
         valid_losses.append(float(valid_total_loss))
-        valid_metrics_list.append(valid_metrics)
 
         if min_loss is None:
             min_loss = valid_losses[-1]
@@ -278,6 +243,8 @@ def evaluation():
         
 if __name__ == '__main__':
     if args.train:
+        # debug 大法好
+        # with torch.autograd.detect_anomaly():
         train()
     
     if args.evaluation:

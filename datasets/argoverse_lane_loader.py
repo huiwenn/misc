@@ -31,17 +31,17 @@ class ArgoverseDataset(IterableDataset):
                 data = pickle.load(f)
             # data = {k:v[0] for k, v in data.items()}
             lane_mask = np.zeros(self.max_lane_nodes, dtype=np.float32)
-            lane_mask[:len(data['lane'][0])] = 1.0
+            lane_mask[:len(data['lane'])] = 1.0
             data['lane_mask'] = [lane_mask]
 
-            if data['lane'][0].shape[0] > self.max_lane_nodes:
+            if data['lane'].shape[0] > self.max_lane_nodes:
                 continue
 
-            if data['lane'][0].shape[0] < self.min_lane_nodes:
+            if data['lane'].shape[0] < self.min_lane_nodes:
                 continue
 
-            data['lane'] = [self.expand_particle(data['lane'][0], self.max_lane_nodes, 0)]
-            data['lane_norm'] = [self.expand_particle(data['lane_norm'][0], self.max_lane_nodes, 0)]
+            data['lane'] = [self.expand_particle(data['lane'][...,:2], self.max_lane_nodes, 0)]
+            data['lane_norm'] = [self.expand_particle(data['lane_norm'][...,:2], self.max_lane_nodes, 0)]
 
             if self.transform:
                 data = self.transform(data)

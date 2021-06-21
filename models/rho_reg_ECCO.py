@@ -37,7 +37,7 @@ class ECCONetwork(nn.Module):
         # self.filter_extent = np.float32(self.radius_scale * 6 * self.particle_radius)
         
         self.encoder_hidden_size = encoder_hidden_size
-        self.in_channel = 1 + self.encoder_hidden_size
+        self.in_channel = self.encoder_hidden_size
         self.activation = F.relu
         # self.relu_shift = torch.nn.parameter.Parameter(torch.tensor(0.2))
         relu_shift = torch.tensor(0.2)
@@ -126,11 +126,10 @@ class ECCONetwork(nn.Module):
             fluid_feats.append(other_feats)
         fluid_feats = torch.cat(fluid_feats, -2)
         
-        print('fluid feats', fluid_feats.shape)
-        print('fluid mask', fluid_mask.shape)
         # compute the correction by accumulating the output through the network layers
         output_conv_fluid = self.conv_fluid(p, p, fluid_feats, fluid_mask)
         output_dense_fluid = self.dense_fluid(fluid_feats)
+
         output_conv_obstacle = self.conv_obstacle(box, p, box_feats.unsqueeze(-2), box_mask)
         
         feats = torch.cat((output_conv_obstacle, output_conv_fluid, output_dense_fluid), -2)
@@ -171,7 +170,7 @@ class ECCONetwork(nn.Module):
         v0_enc: [batch, num_part, timestamps, 2]
         Computes 1 simulation timestep"""
         p0_enc, v0_enc, p0, v0, a, other_feats, box, box_feats, fluid_mask, box_mask = inputs
-            
+        
         if states is None:
             if other_feats is None:
                 feats = v0_enc
@@ -183,8 +182,7 @@ class ECCONetwork(nn.Module):
                 feats = torch.cat((states[0][...,1:,:], feats), -2)
             else:
                 feats = torch.cat((other_feats, states[0][...,1:,:], v0_enc), -2)
-        # print(feats.shape)
-
+        
         # a = (v0 - v0_enc[...,-1,:]) / self.timestep
         p1, v1 = self.update_pos_vel(p0, v0, a)
         pos_correction = self.compute_correction(p1, v1, feats, box, box_feats, fluid_mask, box_mask)
@@ -195,6 +193,6 @@ class ECCONetwork(nn.Module):
         m_matrix = pos_correction[..., 1:, :]
 
         # return output channels after the first one
-        return p_corrected, v_corrected, m_matrix, (feats, None)
+        return p_corrected, v_corrected, m_matrix, (feats[..., other_feats.shape[-2]:,:], None)
 
 

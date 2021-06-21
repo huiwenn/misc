@@ -12,11 +12,11 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from train_utils import *
 
 
-def get_agent(pr, gt, pr_id, gt_id, agent_id, device='cpu'):
-        
+def get_agent(pr, gt, pr_id, gt_id, agent_id, device='cpu'): # only works for batch size 1
+
     pr_agent = pr[pr_id == agent_id,:]
     gt_agent = gt[gt_id == agent_id,:]
-    
+
     return pr_agent, gt_agent
 
 
@@ -28,7 +28,7 @@ def evaluate(model, val_dataset, use_lane=False,
         
     count = 0
     prediction_gt = {}
-    losses = []
+    losses = 0
     val_iter = iter(val_dataset)
     
     for i, sample in enumerate(val_dataset):
@@ -52,52 +52,33 @@ def evaluate(model, val_dataset, use_lane=False,
         else:
             sample['lane_mask'] = [np.array([0])] * batch_size
         
-        data = {}
-        convert_keys = (['pos' + str(i) for i in range(31)] + 
-                        ['vel' + str(i) for i in range(31)] + 
-                        ['pos_2s', 'vel_2s', 'lane', 'lane_norm'])
-
-        for k in convert_keys:
-            data[k] = torch.tensor(np.stack(sample[k])[...,:2], dtype=torch.float32, device=device)
-
-
-        for k in ['track_id' + str(i) for i in range(31)] + ['city', 'agent_id', 'scene_idx']:
-            data[k] = np.stack(sample[k])
         
-        for k in ['car_mask', 'lane_mask']:
-            data[k] = torch.tensor(np.stack(sample[k]), dtype=torch.float32, device=device).unsqueeze(-1)
-            
-        scenes = data['scene_idx'].tolist()
-            
-        data['agent_id'] = data['agent_id'][:,np.newaxis]
-        
-        data['car_mask'] = data['car_mask'].squeeze(-1)
-        accel = torch.zeros(1, 1, 2).to(device)
-        data['accel'] = accel
+        data = process_batch(sample, device)
 
         lane = data['lane']
         lane_normals = data['lane_norm']
         agent_id = data['agent_id']
         city = data['city']
-        
+        scenes = data['scene_idx'].tolist()
+
         inputs = ([
             data['pos_2s'], data['vel_2s'], 
             data['pos0'], data['vel0'], 
-            data['accel'], None,
+            data['accel'], data['sigmas'],
             data['lane'], data['lane_norm'], 
             data['car_mask'], data['lane_mask']
         ])
 
-        pr_pos1, pr_vel1, states = model(inputs)
+        pr_pos1, pr_vel1, pr_m1, states = model(inputs)
         gt_pos1 = data['pos1']
-
-        l = 0.5 * loss_fn(pr_pos1, gt_pos1, 
-                          torch.sum(data['car_mask'], dim = -2) - 1, data['car_mask'].squeeze(-1))
+        
+        losses = nll(pr_pos1, gt_pos1, pr_m1, data['car_mask'].squeeze(-1))
 
         pr_agent, gt_agent = get_agent(pr_pos1, data['pos1'],
-                                       data['track_id0'], 
-                                       data['track_id1'], 
-                                       agent_id, device)
+                                       data['track_id0'].squeeze(-1), 
+                                       data['track_id1'].squeeze(-1), 
+                                       agent_id.squeeze(-1), device)
+        
         pred.append(pr_agent.unsqueeze(1).detach().cpu())
         gt.append(gt_agent.unsqueeze(1).detach().cpu())
         del pr_agent, gt_agent
@@ -105,37 +86,38 @@ def evaluate(model, val_dataset, use_lane=False,
 
         pos0 = data['pos0']
         vel0 = data['vel0']
+        m0 = torch.zeros((batch_size, 60, 2, 2), device=pos0.device)
         for i in range(29):
             pos_enc = torch.unsqueeze(pos0, 2)
             vel_enc = torch.unsqueeze(vel0, 2)
-            inputs = (pos_enc, vel_enc, pr_pos1, pr_vel1, data['accel'], None, 
-                      data['lane'], data['lane_norm'], data['car_mask'], data['lane_mask'])
+            inputs = (pos_enc, vel_enc, pr_pos1, pr_vel1, data['accel'],
+                      torch.cat([m0, pr_m1], dim=-2), 
+                      data['lane'],
+                      data['lane_norm'], data['car_mask'], data['lane_mask'])
             pos0, vel0 = pr_pos1, pr_vel1
-            pr_pos1, pr_vel1, states = model(inputs, states)
+            pos0, vel0, m0 = pr_pos1, pr_vel1, pr_m1
             clean_cache(device)
             
-            if i < train_window - 1:
-                gt_pos1 = data['pos'+str(i+2)]
-                l += 0.5 * loss_fn(pr_pos1, gt_pos1,
-                                   torch.sum(data['car_mask'], dim = -2) - 1, data['car_mask'].squeeze(-1))
 
-            pr_agent, gt_agent = get_agent(pr_pos1, data['pos'+str(i+2)],
-                                           data['track_id0'], 
-                                           data['track_id'+str(i+2)], 
-                                           agent_id, device)
+            gt_pos1 = data['pos'+str(i+1)]
+            losses += nll(pr_pos1, gt_pos1, pr_m1, data['car_mask'].squeeze(-1))
+
+            pr_agent, gt_agent = get_agent(pr_pos1, data['pos'+str(i+1)],
+                                           data['track_id0'].squeeze(-1), 
+                                           data['track_id'+str(i+1)].squeeze(-1), 
+                                           agent_id.squeeze(-1), device)
 
             pred.append(pr_agent.unsqueeze(1).detach().cpu())
             gt.append(gt_agent.unsqueeze(1).detach().cpu())
             
             clean_cache(device)
         
-        losses.append(l)
 
         predict_result = (torch.cat(pred, axis=1), torch.cat(gt, axis=1))
         for idx, scene_id in enumerate(scenes):
             prediction_gt[scene_id] = (predict_result[0][idx], predict_result[1][idx])
     
-    total_loss = 128 * torch.sum(torch.stack(losses),axis=0) / max_iter
+    total_loss = losses / batch_size*len(val_dataset)
     
     result = {}
     de = {}
@@ -154,6 +136,7 @@ def evaluate(model, val_dataset, use_lane=False,
         de2s.append(v.numpy()[20])
         de3s.append(v.numpy()[-1])
     
+    result['nll'] = total_loss.detach().cpu()
     result['ADE'] = np.mean(ade)
     result['ADE_std'] = np.std(ade)
     result['DE@1s'] = np.mean(de1s)
@@ -166,7 +149,7 @@ def evaluate(model, val_dataset, use_lane=False,
     print(result)
     print('done')
 
-    return total_loss, prediction_gt
+    return total_loss
 
 
 

@@ -156,7 +156,6 @@ class EquiCtsConvBase(nn.Module, metaclass=ABCMeta):
         @field_mask: [batch, num_n, 1]
         """
         kernel = self.computeKernel()
-        print("kernel", kernel.shape)
         
         relative_field = (field.unsqueeze(1) - center.unsqueeze(2)) / self.radius
         # relative_field: [batch, num_m, num_n, pos_dim]
@@ -192,10 +191,6 @@ class EquiCtsConvBase(nn.Module, metaclass=ABCMeta):
         
         attention_field_feat = field_feat.unsqueeze(1)*attention.unsqueeze(-1)
         # attention_field_feat: [batch, num_m, num_n, c_in, 2]
-
-        print('kernel_on_field',kernel_on_field.shape)
-        print("attention_field_feat", attention_field_feat.shape)
-
         out = torch.einsum('bmnoiyx,bmnix->bmoy', kernel_on_field, attention_field_feat)
         # out: [batch, num_m, c_out, 2]
         
