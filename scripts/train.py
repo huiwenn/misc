@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import os
 import sys
-import numpy as np
 sys.path.append('..')
 from collections import namedtuple
 import time
@@ -129,11 +128,11 @@ def train():
             inputs = (pos_enc, vel_enc, pr_pos1, pr_vel1, batch['accel'],
                       torch.cat([m0, pr_m1], dim=-2), 
                       batch['lane'],
-                      batch['lane_norm'],batch['car_mask'], batch['lane_mask'])
+                      batch['lane_norm'], batch['car_mask'], batch['lane_mask'])
             pos0, vel0, m0 = pr_pos1, pr_vel1, pr_m1
             # del pos_enc, vel_enc
             
-            pr_pos1, pr_vel1, m_matrix, states = model(inputs, states)
+            pr_pos1, pr_vel1, pr_m1, states = model(inputs, states)
             gt_pos1 = batch['pos'+str(i+2)]
             
             losses += nll(pr_pos1, gt_pos1, pr_m1, batch['car_mask'].squeeze(-1))

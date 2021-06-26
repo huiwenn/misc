@@ -30,7 +30,7 @@ def evaluate(model, val_dataset, use_lane=False,
     prediction_gt = {}
     losses = 0
     val_iter = iter(val_dataset)
-    
+
     for i, sample in enumerate(val_dataset):
         
         if i >= max_iter:
@@ -87,37 +87,38 @@ def evaluate(model, val_dataset, use_lane=False,
         pos0 = data['pos0']
         vel0 = data['vel0']
         m0 = torch.zeros((batch_size, 60, 2, 2), device=pos0.device)
-        for i in range(29):
+        for j in range(29):
             pos_enc = torch.unsqueeze(pos0, 2)
             vel_enc = torch.unsqueeze(vel0, 2)
             inputs = (pos_enc, vel_enc, pr_pos1, pr_vel1, data['accel'],
                       torch.cat([m0, pr_m1], dim=-2), 
                       data['lane'],
                       data['lane_norm'], data['car_mask'], data['lane_mask'])
-            pos0, vel0 = pr_pos1, pr_vel1
+
             pos0, vel0, m0 = pr_pos1, pr_vel1, pr_m1
+
+            pr_pos1, pr_vel1, pr_m1, states = model(inputs, states)
             clean_cache(device)
             
 
-            gt_pos1 = data['pos'+str(i+1)]
+            gt_pos1 = data['pos'+str(j+1)]
             losses += nll(pr_pos1, gt_pos1, pr_m1, data['car_mask'].squeeze(-1))
 
-            pr_agent, gt_agent = get_agent(pr_pos1, data['pos'+str(i+1)],
+            pr_agent, gt_agent = get_agent(pr_pos1, data['pos'+str(j+1)],
                                            data['track_id0'].squeeze(-1), 
-                                           data['track_id'+str(i+1)].squeeze(-1), 
+                                           data['track_id'+str(j+1)].squeeze(-1),
                                            agent_id.squeeze(-1), device)
 
             pred.append(pr_agent.unsqueeze(1).detach().cpu())
             gt.append(gt_agent.unsqueeze(1).detach().cpu())
             
             clean_cache(device)
-        
 
         predict_result = (torch.cat(pred, axis=1), torch.cat(gt, axis=1))
         for idx, scene_id in enumerate(scenes):
             prediction_gt[scene_id] = (predict_result[0][idx], predict_result[1][idx])
     
-    total_loss = losses / batch_size*len(val_dataset)
+    total_loss = losses / batch_size*count
     
     result = {}
     de = {}
@@ -149,7 +150,7 @@ def evaluate(model, val_dataset, use_lane=False,
     print(result)
     print('done')
 
-    return total_loss
+    return total_loss, prediction_gt
 
 
 
