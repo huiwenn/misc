@@ -15,6 +15,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+from torch.utils.tensorboard import SummaryWriter
 
 
 parser = argparse.ArgumentParser(description="Training setting and hyperparameters")
@@ -81,6 +82,7 @@ class MyDataParallel(torch.nn.DataParallel):
 
 def train():
     am = ArgoverseMap()
+    writer = SummaryWriter()
 
     model = create_model().to(device)
 
@@ -176,7 +178,7 @@ def train():
             data_load_times.append(data_fetch_latency)
 
             current_loss = train_one_batch(model, batch_tensor, train_window=args.train_window)
-            
+
             if sub_idx < args.batch_divide:
                 current_loss.backward(retain_graph=True)
             else:
@@ -196,10 +198,11 @@ def train():
 
         model.eval()
         with torch.no_grad():
-            valid_total_loss = evaluate(model.module, val_dataset, 
+            valid_total_loss, _ = evaluate(model.module, val_dataset, 
                                                        max_iter=args.val_batches, 
                                                        device=device, use_lane=args.use_lane, 
                                                        batch_size=args.val_batch_size)
+
 
         valid_losses.append(float(valid_total_loss))
 
@@ -220,7 +223,14 @@ def train():
             format(get_lr(optimizer), "5.2e"), model_name
         ))
 
+        writer.add_scalar("Loss/train", train_losses[-1], i)
+        writer.add_scalar("Loss/test", valid_losses[-1], i)
+        writer.flush()
+
         scheduler.step()
+
+    writer.close()
+
         
 
 def evaluation():

@@ -118,7 +118,7 @@ def evaluate(model, val_dataset, use_lane=False,
         for idx, scene_id in enumerate(scenes):
             prediction_gt[scene_id] = (predict_result[0][idx], predict_result[1][idx])
     
-    total_loss = losses / batch_size*count
+    total_loss = losses / (batch_size*count)
     
     result = {}
     de = {}
@@ -137,7 +137,7 @@ def evaluate(model, val_dataset, use_lane=False,
         de2s.append(v.numpy()[20])
         de3s.append(v.numpy()[-1])
     
-    result['nll'] = total_loss.detach().cpu()
+    result['nll'] = total_loss.detach().cpu().numpy()
     result['ADE'] = np.mean(ade)
     result['ADE_std'] = np.std(ade)
     result['DE@1s'] = np.mean(de1s)
