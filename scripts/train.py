@@ -224,7 +224,7 @@ def train():
         ))
 
         writer.add_scalar("Loss/train", train_losses[-1], i)
-        writer.add_scalar("Loss/test", valid_losses[-1], i)
+        writer.add_scalar("Loss/validation", valid_losses[-1], i)
         writer.flush()
 
         scheduler.step()
