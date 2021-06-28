@@ -2,8 +2,6 @@
 import os
 import sys
 import numpy as np
-import time
-import importlib
 import torch
 import pickle
 
@@ -31,7 +29,7 @@ def evaluate(model, val_dataset, use_lane=False,
     losses = 0
     val_iter = iter(val_dataset)
 
-    for i, sample in enumerate(val_dataset):
+    for i, sample in enumerate(val_iter):
         
         if i >= max_iter:
             break

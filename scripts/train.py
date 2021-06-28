@@ -29,12 +29,12 @@ parser.add_argument('--epochs', default=70, type=int)
 parser.add_argument('--batches_per_epoch', default=600, type=int, 
                     help='determine the number of batches to train in one epoch')
 parser.add_argument('--base_lr', default=0.001, type=float)
-parser.add_argument('--batch_size', default=16, type=int)
+parser.add_argument('--batch_size', default=1, type=int)
 parser.add_argument('--model_name', default='ecco_trained_model', type=str)
 parser.add_argument('--use_lane', default=False, action='store_true')
-parser.add_argument('--val_batches', default=50, type=int, 
+parser.add_argument('--val_batches', default=600, type=int,
                     help='the number of batches of data to split as validation set')
-parser.add_argument('--val_batch_size', default=16, type=int)
+parser.add_argument('--val_batch_size', default=1, type=int)
 parser.add_argument('--train', default=False, action='store_true')
 parser.add_argument('--evaluation', default=False, action='store_true')
 
