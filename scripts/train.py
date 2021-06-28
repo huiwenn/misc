@@ -6,6 +6,7 @@ from collections import namedtuple
 import time
 import pickle
 import argparse
+import datetime
 from evaluate_network import evaluate
 from argoverse.map_representation.map_api import ArgoverseMap
 from datasets.argoverse_lane_loader import read_pkl_data
@@ -81,8 +82,9 @@ class MyDataParallel(torch.nn.DataParallel):
             return getattr(self.module, name)
 
 def train():
-    am = ArgoverseMap()
-    writer = SummaryWriter()
+    #am = ArgoverseMap()
+    log_dir = "runs/" + model_name + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    writer = SummaryWriter(log_dir=log_dir)
 
     model = create_model().to(device)
 
