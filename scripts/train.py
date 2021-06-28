@@ -89,7 +89,7 @@ def train():
     model = create_model().to(device)
 
     print('loading validation dataset')
-    val_dataset = read_pkl_data(val_path, batch_size=args.val_batch_size, shuffle=True, repeat=False, max_lane_nodes=700)
+    val_dataset = read_pkl_data(val_path, batch_size=args.val_batch_size, shuffle=True, repeat=True, max_lane_nodes=700)
 
     print('loading tain dataset')
     dataset = read_pkl_data(train_path, batch_size=args.batch_size / args.batch_divide,

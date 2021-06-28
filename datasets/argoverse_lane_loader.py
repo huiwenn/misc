@@ -79,6 +79,7 @@ def read_pkl_data(data_path: str, batch_size: int,
                   shuffle: bool=False, repeat: bool=False, **kwargs):
     dataset = ArgoverseDataset(data_path=data_path, shuffle=shuffle, **kwargs)
     loader = DataLoader(dataset, batch_size=int(batch_size), collate_fn=dict_collate_func)
+
     if repeat:
         while True:
             for data in loader:

@@ -85,7 +85,7 @@ def evaluate(model, val_dataset, use_lane=False,
         pos0 = data['pos0']
         vel0 = data['vel0']
         m0 = torch.zeros((batch_size, 60, 2, 2), device=pos0.device)
-        for j in range(29):
+        for j in range(train_window): #29
             pos_enc = torch.unsqueeze(pos0, 2)
             vel_enc = torch.unsqueeze(vel0, 2)
             inputs = (pos_enc, vel_enc, pr_pos1, pr_vel1, data['accel'],
