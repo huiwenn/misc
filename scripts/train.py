@@ -88,9 +88,6 @@ def train():
 
     model = create_model().to(device)
 
-    print('loading validation dataset')
-    val_dataset = read_pkl_data(val_path, batch_size=args.val_batch_size, shuffle=True, repeat=True, max_lane_nodes=700)
-
     print('loading tain dataset')
     dataset = read_pkl_data(train_path, batch_size=args.batch_size / args.batch_divide,
                             repeat=True, shuffle=True, max_lane_nodes=900)
@@ -108,6 +105,10 @@ def train():
     def train_one_batch(model, batch, train_window=2):
 
         batch_size = args.batch_size
+        if not args.use_lane:
+            batch['lane'] = torch.zeros(batch_size, 1, 2, device=device)
+            batch['lane_norm'] = torch.zeros(batch_size, 1, 2, device=device)
+            batch['lane_mask'] = torch.ones(batch_size, 1, 1, device=device)
 
         inputs = ([
             batch['pos_2s'], batch['vel_2s'],
@@ -131,8 +132,8 @@ def train():
 
             inputs = (pos_enc, vel_enc, pr_pos1, pr_vel1, batch['accel'],
                       torch.cat([m0, pr_m1], dim=-2), 
-                      batch['lane'],
-                      batch['lane_norm'], batch['car_mask'], batch['lane_mask'])
+                      batch['lane'], batch['lane_norm'], 
+                      batch['car_mask'], batch['lane_mask'])
             pos0, vel0, m0 = pr_pos1, pr_vel1, pr_m1
             # del pos_enc, vel_enc
             
@@ -200,6 +201,8 @@ def train():
 
         model.eval()
         with torch.no_grad():
+            print('loading validation dataset')
+            val_dataset = read_pkl_data(val_path, batch_size=args.val_batch_size, shuffle=False, repeat=False)
             valid_total_loss, _ = evaluate(model.module, val_dataset, 
                                                        max_iter=args.val_batches, 
                                                        device=device, use_lane=args.use_lane, 

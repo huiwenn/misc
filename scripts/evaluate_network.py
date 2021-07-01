@@ -27,9 +27,8 @@ def evaluate(model, val_dataset, use_lane=False,
     count = 0
     prediction_gt = {}
     losses = 0
-    val_iter = iter(val_dataset)
 
-    for i, sample in enumerate(val_iter):
+    for i, sample in enumerate(val_dataset):
         
         if i >= max_iter:
             break
@@ -44,14 +43,16 @@ def evaluate(model, val_dataset, use_lane=False,
             print('{}'.format(count + 1), end=' ', flush=True)
         
         count += 1
-        
+
+        data = process_batch(sample, device)
+
         if use_lane:
             pass
         else:
             sample['lane_mask'] = [np.array([0])] * batch_size
+            data['lane'], data['lane_norm'] = torch.zeros(batch_size, 1, 2, device=device), torch.zeros(batch_size, 1, 2, device=device)
+            data['lane_mask'] = torch.ones(batch_size, 1, 1, device=device)
         
-        
-        data = process_batch(sample, device)
 
         lane = data['lane']
         lane_normals = data['lane_norm']
@@ -85,7 +86,7 @@ def evaluate(model, val_dataset, use_lane=False,
         pos0 = data['pos0']
         vel0 = data['vel0']
         m0 = torch.zeros((batch_size, 60, 2, 2), device=pos0.device)
-        for j in range(train_window): #29
+        for j in range(29):
             pos_enc = torch.unsqueeze(pos0, 2)
             vel_enc = torch.unsqueeze(vel0, 2)
             inputs = (pos_enc, vel_enc, pr_pos1, pr_vel1, data['accel'],
@@ -116,7 +117,7 @@ def evaluate(model, val_dataset, use_lane=False,
         for idx, scene_id in enumerate(scenes):
             prediction_gt[scene_id] = (predict_result[0][idx], predict_result[1][idx])
     
-    total_loss = losses / (batch_size*count)
+    total_loss = losses / (batch_size*30*count)
     
     result = {}
     de = {}
