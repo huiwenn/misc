@@ -96,6 +96,7 @@ def train():
     data_iter = iter(dataset)
 
     if args.load_model_path:
+        print('loading model from ' + args.load_model_path)
         model_ = torch.load(args.load_model_path + '.pth')
         model = model_
     else:
