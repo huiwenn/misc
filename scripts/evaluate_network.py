@@ -10,12 +10,15 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from train_utils import *
 
 
-def get_agent(pr, gt, pr_id, gt_id, agent_id, device='cpu'): # only works for batch size 1
+def get_agent(pr, gt, pr_id, gt_id, agent_id, device='cpu', pr_m1=None): # only works for batch size 1
+    pr_agent = pr[pr_id == agent_id, :]
+    gt_agent = gt[gt_id == agent_id, :]
+    if pr_m1 is not None:
+        pr_m_agent = torch.flatten(pr_m1[pr_id == agent_id, :]).unsqueeze(dim=0)
+    else:
+        pr_m_agent = torch.zeros_like(pr_agent)
 
-    pr_agent = pr[pr_id == agent_id,:]
-    gt_agent = gt[gt_id == agent_id,:]
-
-    return pr_agent, gt_agent
+    return torch.cat([pr_agent, pr_m_agent], dim=1), gt_agent
 
 
 def evaluate(model, val_dataset, use_lane=False,
@@ -76,7 +79,7 @@ def evaluate(model, val_dataset, use_lane=False,
         pr_agent, gt_agent = get_agent(pr_pos1, data['pos1'],
                                        data['track_id0'].squeeze(-1), 
                                        data['track_id1'].squeeze(-1), 
-                                       agent_id.squeeze(-1), device)
+                                       agent_id.squeeze(-1), device, pr_m1=pr_m1)
         
         pred.append(pr_agent.unsqueeze(1).detach().cpu())
         gt.append(gt_agent.unsqueeze(1).detach().cpu())
@@ -106,7 +109,7 @@ def evaluate(model, val_dataset, use_lane=False,
             pr_agent, gt_agent = get_agent(pr_pos1, data['pos'+str(j+1)],
                                            data['track_id0'].squeeze(-1), 
                                            data['track_id'+str(j+1)].squeeze(-1),
-                                           agent_id.squeeze(-1), device)
+                                           agent_id.squeeze(-1), device, pr_m1=pr_m1)
 
             pred.append(pr_agent.unsqueeze(1).detach().cpu())
             gt.append(gt_agent.unsqueeze(1).detach().cpu())

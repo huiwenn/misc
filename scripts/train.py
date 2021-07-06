@@ -38,6 +38,8 @@ parser.add_argument('--val_batches', default=600, type=int,
 parser.add_argument('--val_batch_size', default=1, type=int)
 parser.add_argument('--train', default=False, action='store_true')
 parser.add_argument('--evaluation', default=False, action='store_true')
+parser.add_argument('--load_model_path', default='', type=str, help='path to model to be loaded')
+
 
 feature_parser = parser.add_mutually_exclusive_group(required=False)
 feature_parser.add_argument('--rho1', dest='representation', action='store_false')
@@ -86,16 +88,19 @@ def train():
     log_dir = "runs/" + model_name + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     writer = SummaryWriter(log_dir=log_dir)
 
-    model = create_model().to(device)
 
     print('loading tain dataset')
     dataset = read_pkl_data(train_path, batch_size=args.batch_size / args.batch_divide,
                             repeat=True, shuffle=True, max_lane_nodes=900)
 
-    data_iter = iter(dataset)   
-    
-    # model_ = torch.load(model_name + '.pth')
-    # model = model_
+    data_iter = iter(dataset)
+
+    if args.load_model_path:
+        model_ = torch.load(args.load_model_path + '.pth')
+        model = model_
+    else:
+        model = create_model().to(device)
+
     model = MyDataParallel(model)
     optimizer = torch.optim.Adam(model.parameters(), args.base_lr,betas=(0.9, 0.999), weight_decay=4e-4)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size= 1, gamma=0.95)

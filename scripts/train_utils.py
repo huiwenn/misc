@@ -113,8 +113,6 @@ def process_batch(batch, device, train_window = 30):
     accel = torch.zeros(batch_size, 1, 2).to(device)
     batch_tensor['accel'] = accel
 
-
-
     # batch sigmas: starting with two zero 2x2 matrices
     batch_tensor['sigmas'] = torch.zeros(batch_size, 60, 4, 2).to(device)
 
