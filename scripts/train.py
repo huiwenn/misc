@@ -39,6 +39,8 @@ parser.add_argument('--val_batch_size', default=1, type=int)
 parser.add_argument('--train', default=False, action='store_true')
 parser.add_argument('--evaluation', default=False, action='store_true')
 parser.add_argument('--load_model_path', default='', type=str, help='path to model to be loaded')
+parser.add_argument('--loss', default='nll', type=str, help='nll or ecco loss')
+
 
 
 feature_parser = parser.add_mutually_exclusive_group(required=False)
@@ -115,6 +117,11 @@ def train():
             batch['lane'] = torch.zeros(batch_size, 1, 2, device=device)
             batch['lane_norm'] = torch.zeros(batch_size, 1, 2, device=device)
             batch['lane_mask'] = torch.ones(batch_size, 1, 1, device=device)
+        
+        if args.loss == "ecco":
+            loss_f = ecco_loss
+        else: # args.loss == "nll":
+            loss_f = nll
 
         inputs = ([
             batch['pos_2s'], batch['vel_2s'],
@@ -127,7 +134,7 @@ def train():
         pr_pos1, pr_vel1, pr_m1, states = model(inputs)
         gt_pos1 = batch['pos1']
 
-        losses = nll(pr_pos1, gt_pos1, pr_m1, batch['car_mask'].squeeze(-1))
+        losses = loss_f(pr_pos1, gt_pos1, pr_m1, batch['car_mask'].squeeze(-1))
         del gt_pos1
         pos0 = batch['pos0']
         vel0 = batch['vel0']
@@ -146,7 +153,7 @@ def train():
             pr_pos1, pr_vel1, pr_m1, states = model(inputs, states)
             gt_pos1 = batch['pos'+str(i+2)]
             
-            losses += nll(pr_pos1, gt_pos1, pr_m1, batch['car_mask'].squeeze(-1))
+            losses += loss_f(pr_pos1, gt_pos1, pr_m1, batch['car_mask'].squeeze(-1))
 
 
         total_loss = torch.sum(losses,axis=0) / batch_size

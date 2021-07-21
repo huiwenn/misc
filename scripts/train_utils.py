@@ -17,6 +17,9 @@ def loss_fn(pr_pos, gt_pos, num_fluid_neighbors, car_mask):
     # print(batch_losses)
     return torch.sum(batch_losses)
 
+def ecco_loss(pr_pos, gt_pos, pred_m, car_mask):
+    l = loss_fn(pr_pos, gt_pos, torch.sum(car_mask) - 1, car_mask)
+    return l
 
 def quadratic_func(x, M):
     part1 = torch.einsum('...x,...xy->...y', x, M)
@@ -31,11 +34,9 @@ def calc_sigma(M):
 
 def nll(pr_pos, gt_pos, pred_m, car_mask):
     sigma = calc_sigma(pred_m)
-    
-    loss = quadratic_func(gt_pos - pr_pos, sigma.inverse()) \
+    loss = 0.5 * quadratic_func(gt_pos - pr_pos, sigma.inverse()) \
            + torch.log(2 * 3.1416 * torch.pow(sigma.det(), -0.5))
-
-    return torch.sum(loss * car_mask)
+    return torch.mean(loss * car_mask)
 
 
 def clean_cache(device):
