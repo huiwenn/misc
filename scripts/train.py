@@ -156,7 +156,7 @@ def train():
             losses += loss_f(pr_pos1, gt_pos1, pr_m1, batch['car_mask'].squeeze(-1))
 
 
-        total_loss = torch.sum(losses,axis=0) / batch_size
+        total_loss = torch.sum(losses,axis=0) / (batch_size*train_window)
 
         return total_loss
     

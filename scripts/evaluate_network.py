@@ -22,6 +22,8 @@ def evaluate(model, val_dataset, use_lane=False,
     losses = 0
 
     for i, sample in enumerate(val_dataset):
+        print('eval batch i', i)
+        print(len(sample))
         
         if i >= max_iter:
             break
@@ -38,6 +40,7 @@ def evaluate(model, val_dataset, use_lane=False,
         count += 1
 
         data = process_batch(sample, device)
+        print('len of batch', len(data['city']))
 
         if use_lane:
             pass
@@ -69,7 +72,7 @@ def evaluate(model, val_dataset, use_lane=False,
         pr_agent, gt_agent = get_agent(pr_pos1, data['pos1'],
                                        data['track_id0'].squeeze(-1), 
                                        data['track_id1'].squeeze(-1), 
-                                       agent_id.squeeze(-1), device, pr_m1=pr_m1)
+                                       agent_id, device, pr_m1=pr_m1)
         
         pred.append(pr_agent.unsqueeze(1).detach().cpu())
         gt.append(gt_agent.unsqueeze(1).detach().cpu())
@@ -97,9 +100,9 @@ def evaluate(model, val_dataset, use_lane=False,
             losses += nll(pr_pos1, gt_pos1, pr_m1, data['car_mask'].squeeze(-1))
 
             pr_agent, gt_agent = get_agent(pr_pos1, data['pos'+str(j+1)],
-                                           data['track_id0'].squeeze(-1), 
+                                           data['track_id0'].squeeze(-1),
                                            data['track_id'+str(j+1)].squeeze(-1),
-                                           agent_id.squeeze(-1), device, pr_m1=pr_m1)
+                                           agent_id, device, pr_m1=pr_m1)
 
             pred.append(pr_agent.unsqueeze(1).detach().cpu())
             gt.append(gt_agent.unsqueeze(1).detach().cpu())

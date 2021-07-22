@@ -2,19 +2,21 @@ import torch
 import gc
 import numpy as np
 
-def get_agent(pr, gt, pr_id, gt_id, agent_id, device='cpu', pr_m1=None): # only works for batch size 1
-    for a_id in agent_id:
-        pr_agent = pr[pr_id == a_id, :]
-        gt_agent = gt[gt_id == a_id, :]
-        if pr_m1 is not None:
-            pr_m_agent = torch.flatten(pr_m1[pr_id == agent_id, :]).unsqueeze(dim=0)
-        else:
-            pr_m_agent = torch.zeros_like(pr_agent) #placeholder
+def get_agent(pr: object, gt: object, pr_id: object, gt_id: object, agent_id: object, device: object = 'cpu', pr_m1: object = None) -> object: # only works for batch size 1
+    pr_agent = pr[pr_id == agent_id, :]
+    gt_agent = gt[gt_id == agent_id, :]
 
-        #print(agent_id)
-        #print('pr_agent', pr_agent.shape)
-        #print('pr_m_agent', pr_m_agent.shape, pr_m_agent)
-    return torch.cat([pr_agent, pr_m_agent], dim=1), gt_agent
+    if pr_m1 is not None:
+        pr_m_agent = torch.flatten(pr_m1[pr_id == agent_id, :], start_dim=-2, end_dim=-1)
+    else:
+        pr_m_agent = torch.zeros(pr_agent.shape[0], 4) #placeholder
+
+    print('pr_id', pr_id.shape)
+    print('agent_id', agent_id.shape)
+    print('pr_agent', pr_agent.shape)
+    print('pr', pr.shape)
+    print('pr_m_agent', pr_m_agent.shape, pr_m_agent)
+    return torch.cat([pr_agent, pr_m_agent], dim=-1), gt_agent
 
 
 def euclidean_distance(a, b, epsilon=1e-9):
@@ -122,7 +124,7 @@ def process_batch(batch, device, train_window = 30):
     for k in ['city', 'agent_id', 'scene_idx']:
         batch_tensor[k] = np.stack(batch[k])
     
-    batch_tensor['agent_id'] = batch_tensor['agent_id'][:,np.newaxis]
+    batch_tensor['agent_id'] = batch_tensor['agent_id'][:, np.newaxis]
 
     batch_tensor['car_mask'] = batch_tensor['car_mask'].squeeze(-1)
     accel = torch.zeros(batch_size, 1, 2).to(device)
