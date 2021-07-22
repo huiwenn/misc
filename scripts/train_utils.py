@@ -2,6 +2,20 @@ import torch
 import gc
 import numpy as np
 
+def get_agent(pr, gt, pr_id, gt_id, agent_id, device='cpu', pr_m1=None): # only works for batch size 1
+    for a_id in agent_id:
+        pr_agent = pr[pr_id == a_id, :]
+        gt_agent = gt[gt_id == a_id, :]
+        if pr_m1 is not None:
+            pr_m_agent = torch.flatten(pr_m1[pr_id == agent_id, :]).unsqueeze(dim=0)
+        else:
+            pr_m_agent = torch.zeros_like(pr_agent) #placeholder
+
+        #print(agent_id)
+        #print('pr_agent', pr_agent.shape)
+        #print('pr_m_agent', pr_m_agent.shape, pr_m_agent)
+    return torch.cat([pr_agent, pr_m_agent], dim=1), gt_agent
+
 
 def euclidean_distance(a, b, epsilon=1e-9):
     return torch.sqrt(torch.sum((a - b)**2, axis=-1) + epsilon)
