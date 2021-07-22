@@ -22,8 +22,7 @@ def evaluate(model, val_dataset, use_lane=False,
     losses = 0
 
     for i, sample in enumerate(val_dataset):
-        print('eval batch i', i)
-        print(len(sample))
+
         
         if i >= max_iter:
             break
@@ -40,7 +39,6 @@ def evaluate(model, val_dataset, use_lane=False,
         count += 1
 
         data = process_batch(sample, device)
-        print('len of batch', len(data['city']))
 
         if use_lane:
             pass

@@ -11,11 +11,6 @@ def get_agent(pr: object, gt: object, pr_id: object, gt_id: object, agent_id: ob
     else:
         pr_m_agent = torch.zeros(pr_agent.shape[0], 4) #placeholder
 
-    print('pr_id', pr_id.shape)
-    print('agent_id', agent_id.shape)
-    print('pr_agent', pr_agent.shape)
-    print('pr', pr.shape)
-    print('pr_m_agent', pr_m_agent.shape, pr_m_agent)
     return torch.cat([pr_agent, pr_m_agent], dim=-1), gt_agent
 
 
