@@ -121,24 +121,27 @@ def evaluate(model, val_dataset, use_lane=False,
                         (v[0][:,1] - v[1][:,1])**2)
         
     ade = []
-    de1s = []
-    de2s = []
-    de3s = []
+
     for k, v in de.items():
         ade.append(np.mean(v.numpy()))
-        de1s.append(v.numpy()[10])
-        de2s.append(v.numpy()[20])
-        de3s.append(v.numpy()[-1])
-    
-    result['nll'] = total_loss.detach().cpu().numpy()
+    result['loss'] = total_loss.detach().cpu().numpy()
     result['ADE'] = np.mean(ade)
     result['ADE_std'] = np.std(ade)
-    result['DE@1s'] = np.mean(de1s)
-    result['DE@1s_std'] = np.std(de1s)
-    result['DE@2s'] = np.mean(de2s)
-    result['DE@2s_std'] = np.std(de2s)
-    result['DE@3s'] = np.mean(de3s)
-    result['DE@3s_std'] = np.std(de3s)
+
+    if train_window >= 29:
+        de1s = []
+        de2s = []
+        de3s = []
+        for k, v in de.items():
+            de1s.append(v.numpy()[10])
+            de2s.append(v.numpy()[20])
+            de3s.append(v.numpy()[-1])
+        result['DE@1s'] = np.mean(de1s)
+        result['DE@1s_std'] = np.std(de1s)
+        result['DE@2s'] = np.mean(de2s)
+        result['DE@2s_std'] = np.std(de2s)
+        result['DE@3s'] = np.mean(de3s)
+        result['DE@3s_std'] = np.std(de3s)
 
     print(result)
     print('done')
