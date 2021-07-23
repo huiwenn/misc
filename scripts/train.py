@@ -8,7 +8,7 @@ import pickle
 import argparse
 import datetime
 from evaluate_network import evaluate
-from argoverse.map_representation.map_api import ArgoverseMap
+#from argoverse.map_representation.map_api import ArgoverseMap
 from datasets.argoverse_lane_loader import read_pkl_data
 from train_utils import *
 
@@ -252,7 +252,7 @@ def train():
         
 
 def evaluation():
-    am = ArgoverseMap()
+    #am = ArgoverseMap()
     
     val_dataset = read_pkl_data(val_path, batch_size=args.val_batch_size, shuffle=False, repeat=False)
     
