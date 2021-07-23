@@ -3,7 +3,7 @@ from glob import glob
 import pickle
 import os
 import numpy as np
-from argoverse.map_representation.map_api import ArgoverseMap
+#from argoverse.map_representation.map_api import ArgoverseMap
 from torch.utils.data import IterableDataset, DataLoader
 
 
