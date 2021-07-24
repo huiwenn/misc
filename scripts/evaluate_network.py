@@ -118,6 +118,9 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     
     for k, v in prediction_gt.items():
         print('lets see', v[0], v[1])
+        M = v[0][:,2:].reshape(v[0].shape[0],2,2)
+        sig = calc_sigma(M)
+        print('sigma',sig)
         de[k] = torch.sqrt((v[0][:,0] - v[1][:,0])**2 + 
                         (v[0][:,1] - v[1][:,1])**2)
         
