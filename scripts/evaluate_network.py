@@ -11,7 +11,7 @@ from train_utils import *
 
 
 
-def evaluate(model, val_dataset, use_lane=False,
+def evaluate(model, val_dataset, loss_f, use_lane=False,
              train_window=3, max_iter=2500, device='cpu', start_iter=0, 
              batch_size=32):
     
@@ -65,7 +65,7 @@ def evaluate(model, val_dataset, use_lane=False,
         pr_pos1, pr_vel1, pr_m1, states = model(inputs)
         gt_pos1 = data['pos1']
         
-        losses = nll(pr_pos1, gt_pos1, pr_m1, data['car_mask'].squeeze(-1))
+        losses = loss_f(pr_pos1, gt_pos1, pr_m1, data['car_mask'].squeeze(-1))
 
         pr_agent, gt_agent = get_agent(pr_pos1, data['pos1'],
                                        data['track_id0'].squeeze(-1), 
@@ -95,7 +95,7 @@ def evaluate(model, val_dataset, use_lane=False,
             
 
             gt_pos1 = data['pos'+str(j+1)]
-            losses += nll(pr_pos1, gt_pos1, pr_m1, data['car_mask'].squeeze(-1))
+            losses += loss_f(pr_pos1, gt_pos1, pr_m1, data['car_mask'].squeeze(-1))
 
             pr_agent, gt_agent = get_agent(pr_pos1, data['pos'+str(j+1)],
                                            data['track_id0'].squeeze(-1),
@@ -117,6 +117,7 @@ def evaluate(model, val_dataset, use_lane=False,
     de = {}
     
     for k, v in prediction_gt.items():
+        print('lets see', v[0], v[1])
         de[k] = torch.sqrt((v[0][:,0] - v[1][:,0])**2 + 
                         (v[0][:,1] - v[1][:,1])**2)
         

@@ -97,6 +97,11 @@ def train():
 
     data_iter = iter(dataset)
 
+    if args.loss == "ecco":
+        loss_f = ecco_loss
+    else:  # args.loss == "nll":
+        loss_f = nll
+
     if args.load_model_path:
         print('loading model from ' + args.load_model_path)
         model_ = torch.load(args.load_model_path + '.pth')
@@ -110,18 +115,13 @@ def train():
 
     print('loaded datasets, starting training')
 
-    def train_one_batch(model, batch, train_window=2):
+    def train_one_batch(model, batch, train_window=2, loss_f):
 
         batch_size = args.batch_size
         if not args.use_lane:
             batch['lane'] = torch.zeros(batch_size, 1, 2, device=device)
             batch['lane_norm'] = torch.zeros(batch_size, 1, 2, device=device)
             batch['lane_mask'] = torch.ones(batch_size, 1, 1, device=device)
-        
-        if args.loss == "ecco":
-            loss_f = ecco_loss
-        else: # args.loss == "nll":
-            loss_f = nll
 
         inputs = ([
             batch['pos_2s'], batch['vel_2s'],
@@ -216,7 +216,7 @@ def train():
         with torch.no_grad():
             print('loading validation dataset')
             val_dataset = read_pkl_data(val_path, batch_size=args.val_batch_size, shuffle=False, repeat=False)
-            valid_total_loss, _ = evaluate(model.module, val_dataset, 
+            valid_total_loss, _ = evaluate(model.module, val_dataset, loss_f,
                                                        max_iter=args.val_batches, 
                                                        device=device, use_lane=args.use_lane, 
                                                        batch_size=args.val_batch_size)
