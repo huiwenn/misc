@@ -115,7 +115,7 @@ def train():
 
     print('loaded datasets, starting training')
 
-    def train_one_batch(model, batch, train_window=2, loss_f):
+    def train_one_batch(model, batch, loss_f, train_window=2):
 
         batch_size = args.batch_size
         if not args.use_lane:
@@ -193,7 +193,7 @@ def train():
             data_fetch_latency = time.time() - data_fetch_start
             data_load_times.append(data_fetch_latency)
 
-            current_loss = train_one_batch(model, batch_tensor, train_window=args.train_window)
+            current_loss = train_one_batch(model, batch_tensor, loss_f, train_window=args.train_window)
 
             if sub_idx < args.batch_divide:
                 current_loss.backward(retain_graph=True)
