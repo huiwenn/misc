@@ -63,6 +63,10 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         ])
 
         pr_pos1, pr_vel1, pr_m1, states = model(inputs)
+
+        #test todo 
+        pr_m1 = torch.zeros((batch_size, 60, 2, 2), device=device)
+
         gt_pos1 = data['pos1']
         
         losses = loss_f(pr_pos1, gt_pos1, pr_m1, data['car_mask'].squeeze(-1))
@@ -79,10 +83,14 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
 
         pos0 = data['pos0']
         vel0 = data['vel0']
-        m0 = torch.zeros((batch_size, 60, 2, 2), device=pos0.device)
+        m0 = torch.zeros((batch_size, 60, 2, 2), device=device)
         for j in range(train_window-1):
             pos_enc = torch.unsqueeze(pos0, 2)
             vel_enc = torch.unsqueeze(vel0, 2)
+            
+            # test todo 
+            pr_m1 = torch.zeros((batch_size, 60, 2, 2), device=device)
+
             inputs = (pos_enc, vel_enc, pr_pos1, pr_vel1, data['accel'],
                       torch.cat([m0, pr_m1], dim=-2), 
                       data['lane'],
@@ -111,7 +119,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         for idx, scene_id in enumerate(scenes):
             prediction_gt[scene_id] = (predict_result[0][idx], predict_result[1][idx])
     
-    total_loss = losses 
+    total_loss = torch.sum(losses,axis=0) / (batch_size*train_window) 
     
     result = {}
     de = {}

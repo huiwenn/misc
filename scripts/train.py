@@ -132,21 +132,29 @@ def train():
         ])
 
         pr_pos1, pr_vel1, pr_m1, states = model(inputs)
+
+        # test todo 
+        pr_m1 = torch.zeros((batch_size, 60, 2, 2), device=device) 
+
         gt_pos1 = batch['pos1']
 
         losses = loss_f(pr_pos1, gt_pos1, pr_m1, batch['car_mask'].squeeze(-1))
         del gt_pos1
         pos0 = batch['pos0']
         vel0 = batch['vel0']
-        m0 = torch.zeros((batch_size, 60, 2, 2), device=pos0.device)
+        m0 = torch.zeros((batch_size, 60, 2, 2), device=device)
         for i in range(train_window-1):
             pos_enc = torch.unsqueeze(pos0, 2)
             vel_enc = torch.unsqueeze(vel0, 2)
-
+            
+            # test todo 
+            pr_m1 = torch.zeros((batch_size, 60, 2, 2), device=pos0.device) 
+            
             inputs = (pos_enc, vel_enc, pr_pos1, pr_vel1, batch['accel'],
                       torch.cat([m0, pr_m1], dim=-2), 
                       batch['lane'], batch['lane_norm'], 
                       batch['car_mask'], batch['lane_mask'])
+
             pos0, vel0, m0 = pr_pos1, pr_vel1, pr_m1
             # del pos_enc, vel_enc
             
@@ -155,8 +163,8 @@ def train():
             
             losses += loss_f(pr_pos1, gt_pos1, pr_m1, batch['car_mask'].squeeze(-1))
 
-
         total_loss = torch.sum(losses,axis=0) / (batch_size*train_window)
+        print('total loss',total_loss)
 
         return total_loss
     

@@ -24,8 +24,8 @@ def loss_fn(pr_pos, gt_pos, num_fluid_neighbors, car_mask):
     importance = torch.exp(-neighbor_scale * num_fluid_neighbors)
     dist = euclidean_distance(pr_pos, gt_pos)**gamma
     mask_dist = dist * car_mask
+    mask_dist = mask_dist[mask_dist.nonzero(as_tuple=True)] #rid zero values
     batch_losses = torch.mean(importance * mask_dist, axis=-1)
-    # print(batch_losses)
     return torch.sum(batch_losses)
 
 def ecco_loss(pr_pos, gt_pos, pred_m, car_mask):

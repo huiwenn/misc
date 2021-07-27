@@ -122,6 +122,7 @@ class ECCONetwork(nn.Module):
         """Precondition: p and v were updated with accerlation"""
 
         fluid_feats = [v.unsqueeze(-2)]
+        
         if not other_feats is None:
             fluid_feats.append(other_feats)
         fluid_feats = torch.cat(fluid_feats, -2)
@@ -161,6 +162,7 @@ class ECCONetwork(nn.Module):
         # self.last_features = self.outputs[-2]
 
         # scale to better match the scale of the output distribution
+        # scale in pecco is (1.0 / 128) 
         self.pos_correction = (1.0 / 128) * output
         return self.pos_correction
     
@@ -185,11 +187,16 @@ class ECCONetwork(nn.Module):
         
         # a = (v0 - v0_enc[...,-1,:]) / self.timestep
         p1, v1 = self.update_pos_vel(p0, v0, a)
+        
         pos_correction = self.compute_correction(p1, v1, feats, box, box_feats, fluid_mask, box_mask)
 
         # the 1st output channel is correction
         # pos_correction.squeeze(-2))
         p_corrected, v_corrected = self.apply_correction(p0, p1, pos_correction[..., 0, :])
+        #print('pos_correction', pos_correction)
+        #print('v0', v0[...,:2,:])
+        #print('pv corrected', p_corrected[...,:2,:], v_corrected[...,:2,:])
+
         m_matrix = pos_correction[..., 1:, :]
 
         # return output channels after the first one
