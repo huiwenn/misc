@@ -9,7 +9,7 @@ def get_agent(pr: object, gt: object, pr_id: object, gt_id: object, agent_id: ob
     if pr_m1 is not None:
         pr_m_agent = torch.flatten(pr_m1[pr_id == agent_id, :], start_dim=-2, end_dim=-1)
     else:
-        pr_m_agent = torch.zeros(pr_agent.shape[0], 4) #placeholder
+        pr_m_agent = torch.zeros(pr_agent.shape[0], 0) #placeholder
 
     return torch.cat([pr_agent, pr_m_agent], dim=-1), gt_agent
 
@@ -40,7 +40,8 @@ def quadratic_func(x, M):
 def calc_sigma(M):
     M1 = torch.tanh(M)
     sigma = torch.einsum('...xy,...xz->...yz', M1, M1)
-    return torch.matrix_exp(sigma)
+    # scalling
+    return 0.1*torch.matrix_exp(sigma)
 
 
 def nll(pr_pos, gt_pos, pred_m, car_mask):

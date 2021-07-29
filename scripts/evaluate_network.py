@@ -102,10 +102,10 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
             clean_cache(device)
             
 
-            gt_pos1 = data['pos'+str(j+1)]
+            gt_pos1 = data['pos'+str(j+2)]
             losses += loss_f(pr_pos1, gt_pos1, pr_m1, data['car_mask'].squeeze(-1))
 
-            pr_agent, gt_agent = get_agent(pr_pos1, data['pos'+str(j+1)],
+            pr_agent, gt_agent = get_agent(pr_pos1, data['pos'+str(j+2)],
                                            data['track_id0'].squeeze(-1),
                                            data['track_id'+str(j+1)].squeeze(-1),
                                            agent_id, device, pr_m1=pr_m1)
@@ -125,7 +125,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     de = {}
     
     for k, v in prediction_gt.items():
-        print('lets see', v[0], v[1])
+        print('outputs', v[0], v[1])
         M = v[0][:,2:].reshape(v[0].shape[0],2,2)
         sig = calc_sigma(M)
         print('sigma',sig)

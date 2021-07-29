@@ -65,7 +65,7 @@ def create_model():
         from models.rho_reg_ECCO import ECCONetwork
         """Returns an instance of the network for training and evaluation"""
         model = ECCONetwork(radius_scale = 40,
-                            layer_channels = [8, 16, 8, 8, 3],
+                            layer_channels = [8, 16, 8, 8, 3], 
                             encoder_hidden_size=23)
     else:
         from models.rho1_ECCO import ECCONetwork
