@@ -148,7 +148,7 @@ def train():
             vel_enc = torch.unsqueeze(vel0, 2)
             
             # test todo 
-            # pr_m1 = torch.zeros((batch_size, 60, 2, 2), device=pos0.device) 
+            #pr_m1 = torch.zeros((batch_size, 60, 2, 2), device=pos0.device) 
             
             inputs = (pos_enc, vel_enc, pr_pos1, pr_vel1, batch['accel'],
                       torch.cat([m0, pr_m1], dim=-2), 
@@ -164,8 +164,6 @@ def train():
             losses += loss_f(pr_pos1, gt_pos1, pr_m1, batch['car_mask'].squeeze(-1))
 
         total_loss = torch.sum(losses,axis=0) / (batch_size*train_window)
-        print('total loss',total_loss)
-
         return total_loss
     
     epochs = args.epochs
@@ -191,7 +189,7 @@ def train():
 
             if sub_idx == 0:
                 optimizer.zero_grad()
-                if (batch_itr // args.batch_divide) % 25 == 0:
+                if (batch_itr // args.batch_divide) % 10 == 0:
                     print("... batch " + str((batch_itr // args.batch_divide) + 1), end='', flush=True)
             sub_idx += 1
             
@@ -202,7 +200,8 @@ def train():
             data_load_times.append(data_fetch_latency)
 
             current_loss = train_one_batch(model, batch_tensor, loss_f, train_window=args.train_window)
-
+            print('currentloss', current_loss)
+            
             if sub_idx < args.batch_divide:
                 current_loss.backward(retain_graph=True)
             else:
