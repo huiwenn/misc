@@ -65,7 +65,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         pr_pos1, pr_vel1, pr_m1, states = model(inputs)
 
         #test todo 
-        pr_m1 = torch.zeros((batch_size, 60, 2, 2), device=device)
+        # pr_m1 = torch.zeros((batch_size, 60, 2, 2), device=device)
 
         gt_pos1 = data['pos1']
         
@@ -89,7 +89,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
             vel_enc = torch.unsqueeze(vel0, 2)
             
             # test todo 
-            pr_m1 = torch.zeros((batch_size, 60, 2, 2), device=device)
+            # pr_m1 = torch.zeros((batch_size, 60, 2, 2), device=device)
 
             inputs = (pos_enc, vel_enc, pr_pos1, pr_vel1, data['accel'],
                       torch.cat([m0, pr_m1], dim=-2), 
@@ -125,10 +125,10 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     de = {}
     
     for k, v in prediction_gt.items():
-        print('outputs', v[0], v[1])
-        M = v[0][:,2:].reshape(v[0].shape[0],2,2)
-        sig = calc_sigma(M)
-        print('sigma',sig)
+        #print('outputs', v[0], v[1])
+        #M = v[0][:,2:].reshape(v[0].shape[0],2,2)
+        #sig = calc_sigma(M)
+        #print('sigma',sig)
         de[k] = torch.sqrt((v[0][:,0] - v[1][:,0])**2 + 
                         (v[0][:,1] - v[1][:,1])**2)
         

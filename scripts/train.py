@@ -134,7 +134,7 @@ def train():
         pr_pos1, pr_vel1, pr_m1, states = model(inputs)
 
         # test todo 
-        pr_m1 = torch.zeros((batch_size, 60, 2, 2), device=device) 
+        # pr_m1 = torch.zeros((batch_size, 60, 2, 2), device=device) 
 
         gt_pos1 = batch['pos1']
 
@@ -148,7 +148,7 @@ def train():
             vel_enc = torch.unsqueeze(vel0, 2)
             
             # test todo 
-            pr_m1 = torch.zeros((batch_size, 60, 2, 2), device=pos0.device) 
+            # pr_m1 = torch.zeros((batch_size, 60, 2, 2), device=pos0.device) 
             
             inputs = (pos_enc, vel_enc, pr_pos1, pr_vel1, batch['accel'],
                       torch.cat([m0, pr_m1], dim=-2), 
@@ -224,7 +224,7 @@ def train():
         with torch.no_grad():
             print('loading validation dataset')
             val_dataset = read_pkl_data(val_path, batch_size=args.val_batch_size, shuffle=False, repeat=False)
-            valid_total_loss, _ = evaluate(model.module, val_dataset, loss_f,
+            valid_total_loss, _ = evaluate(model.module, val_dataset, loss_f, train_window=30,
                                                        max_iter=args.val_batches, 
                                                        device=device, use_lane=args.use_lane, 
                                                        batch_size=args.val_batch_size)

@@ -38,10 +38,11 @@ def quadratic_func(x, M):
 
 
 def calc_sigma(M):
-    M1 = torch.tanh(M)
-    sigma = torch.einsum('...xy,...xz->...yz', M1, M1)
-    # scalling
-    return 0.1*torch.matrix_exp(sigma)
+    #M1 = torch.tanh(M)
+    expM = torch.matrix_exp(M)
+    expMT = torch.matrix_exp(M)
+    sigma = torch.einsum('...xy,...xz->...yz', expM, expMT)
+    return sigma
 
 
 def nll(pr_pos, gt_pos, pred_m, car_mask):
