@@ -222,7 +222,7 @@ def train():
         with torch.no_grad():
             print('loading validation dataset')
             val_dataset = read_pkl_data(val_path, batch_size=args.val_batch_size, shuffle=False, repeat=False)
-            valid_total_loss, _ = evaluate(model.module, val_dataset, loss_f, train_window=30, #args.train_window,
+            valid_total_loss, _ = evaluate(model.module, val_dataset, loss_f, train_window=args.train_window, #30, 
                                                        max_iter=args.val_batches, 
                                                        device=device, use_lane=args.use_lane, 
                                                        batch_size=args.val_batch_size)
