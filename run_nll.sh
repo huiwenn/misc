@@ -1,2 +1,2 @@
 echo yes | conda install pytorch torchvision torchaudio cudatoolkit=10.2 -c pytorch 
-python scripts/train.py --dataset_path /data/argoverse --rho-reg --batch_size 16 --val_batch_size 32 --train --model_name nll_nautilus --batches_per_epoch 600 --val_batches 50 --epochs 100 --loss nll
+python scripts/train.py --dataset_path /data/argoverse --rho-reg --batch_size 16 --val_batch_size 16 --train --model_name nll_nautilus --batches_per_epoch 600 --val_batches 50 --epochs 100 --loss nll
