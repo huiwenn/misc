@@ -200,7 +200,6 @@ def train():
             data_load_times.append(data_fetch_latency)
 
             current_loss = train_one_batch(model, batch_tensor, loss_f, train_window=args.train_window)
-            print('currentloss', current_loss)
             
             if sub_idx < args.batch_divide:
                 current_loss.backward(retain_graph=True)
@@ -223,7 +222,7 @@ def train():
         with torch.no_grad():
             print('loading validation dataset')
             val_dataset = read_pkl_data(val_path, batch_size=args.val_batch_size, shuffle=False, repeat=False)
-            valid_total_loss, _ = evaluate(model.module, val_dataset, loss_f, train_window=30,
+            valid_total_loss, _ = evaluate(model.module, val_dataset, loss_f, train_window=30, #args.train_window,
                                                        max_iter=args.val_batches, 
                                                        device=device, use_lane=args.use_lane, 
                                                        batch_size=args.val_batch_size)
