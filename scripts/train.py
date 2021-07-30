@@ -24,6 +24,7 @@ parser.add_argument('--cuda_visible_devices', default='0,1,2,3')
 parser.add_argument('--dataset_path', default='/path/to/argoverse_forecasting/', 
                     help='path to dataset folder, which contains train and val folders')
 parser.add_argument('--train_window', default=4, type=int, help='how many timestamps to iterate in training')
+parser.add_argument('--val_window', default=30, type=int, help='how many timestamps to iterate in validation')
 parser.add_argument('--batch_divide', default=1, type=int, 
                     help='divide one batch into several packs, and train them iterativelly.')
 parser.add_argument('--epochs', default=70, type=int)
@@ -222,7 +223,7 @@ def train():
         with torch.no_grad():
             print('loading validation dataset')
             val_dataset = read_pkl_data(val_path, batch_size=args.val_batch_size, shuffle=False, repeat=False)
-            valid_total_loss, _ = evaluate(model.module, val_dataset, loss_f, train_window=args.train_window, #30, 
+            valid_total_loss, _ = evaluate(model.module, val_dataset, loss_f, train_window=args.val_window,
                                                        max_iter=args.val_batches, 
                                                        device=device, use_lane=args.use_lane, 
                                                        batch_size=args.val_batch_size)
