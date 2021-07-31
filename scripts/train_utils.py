@@ -47,7 +47,7 @@ def calc_sigma_new(M):
     #M1 = torch.tanh(M)
     expM = torch.matrix_exp(M)
     expMT = torch.matrix_exp(torch.transpose(M,-2,-1))
-    sigma = torch.einsum('...xy,...xz->...yz', expM, expMT)
+    sigma = torch.einsum('...xy,...yz->...xz', expM, expMT)
     return sigma
 
 def nll(pr_pos, gt_pos, pred_m, car_mask):
