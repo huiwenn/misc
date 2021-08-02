@@ -18,6 +18,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 
+#os.environ["NCCL_DEBUG"] = "INFO"
 
 parser = argparse.ArgumentParser(description="Training setting and hyperparameters")
 parser.add_argument('--cuda_visible_devices', default='0,1,2,3')
@@ -131,10 +132,10 @@ def train():
             batch['lane'], batch['lane_norm'], 
             batch['car_mask'], batch['lane_mask']
         ])
-
+    
         pr_pos1, pr_vel1, pr_m1, states = model(inputs)
 
-        # test todo 
+        # test todo
         # pr_m1 = torch.zeros((batch_size, 60, 2, 2), device=device) 
 
         gt_pos1 = batch['pos1']
@@ -199,7 +200,7 @@ def train():
 
             data_fetch_latency = time.time() - data_fetch_start
             data_load_times.append(data_fetch_latency)
-
+            
             current_loss = train_one_batch(model, batch_tensor, loss_f, train_window=args.train_window)
             
             if sub_idx < args.batch_divide:
@@ -211,12 +212,17 @@ def train():
             del batch_tensor
 
             epoch_train_loss += float(current_loss)
+            
+            # test todo
+            # print('current loss', float(current_loss))
+            
             del current_loss
             clean_cache(device)
 
             if batch_itr == batches_per_epoch - 1:
                 print("... DONE", flush=True)
 
+        epoch_train_loss = epoch_train_loss/(batches_per_epoch * args.batch_divide)
         train_losses.append(epoch_train_loss)
 
         model.eval()

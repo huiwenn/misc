@@ -38,7 +38,7 @@ def quadratic_func(x, M):
 
 
 def calc_sigma(M):
-    #M = torch.tanh(M)
+    M = torch.tanh(M)
     sigma = torch.einsum('...xy,...xz->...yz', M, M)
     # scalling
     return 0.1*torch.matrix_exp(sigma)
