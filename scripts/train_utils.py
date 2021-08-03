@@ -32,10 +32,21 @@ def ecco_loss(pr_pos, gt_pos, pred_m, car_mask):
     l = loss_fn(pr_pos, gt_pos, torch.sum(car_mask) - 1, car_mask)
     return l
 
+def mis_loss(pr_pos, gt_pos, pred_m, car_mask, rho = 0.9, scale=50):
+    sigma = calc_sigma(pred_m)
+    c_alpha = - 2 * torch.log(1-rho)
+    det = torch.det(sigma)
+    c_ =  quadratic_func(gt_pos - pr_pos, sigma.inverse()) / det #c prime
+
+    c_delta = c_ - c_alpha
+    c_delta = torch.where(c_delta > 0, c_delta, torch.zeros(c_delta.shape))
+
+    mrs = root_det_epsilon * (c_alpha + scale*c_delta/rho)
+    return torch.mean(mrs)    
+
 def quadratic_func(x, M):
     part1 = torch.einsum('...x,...xy->...y', x, M)
     return torch.einsum('...x,...x->...', part1, x)
-
 
 def calc_sigma(M):
     M = torch.tanh(M)

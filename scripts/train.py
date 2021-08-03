@@ -101,7 +101,9 @@ def train():
 
     if args.loss == "ecco":
         loss_f = ecco_loss
-    else:  # args.loss == "nll":
+    elif args.loss == "mis": 
+        loss_f = mis_loss
+    else: # args.loss == "nll":
         loss_f = nll
 
     if args.load_model_path:
