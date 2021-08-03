@@ -119,7 +119,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         for idx, scene_id in enumerate(scenes):
             prediction_gt[scene_id] = (predict_result[0][idx], predict_result[1][idx])
     
-    total_loss = torch.sum(losses,axis=0) / (batch_size*train_window) 
+    total_loss = torch.sum(losses,axis=0) / (train_window) 
     
     result = {}
     de = {}
