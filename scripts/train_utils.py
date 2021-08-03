@@ -34,7 +34,7 @@ def ecco_loss(pr_pos, gt_pos, pred_m, car_mask):
 
 def mis_loss(pr_pos, gt_pos, pred_m, car_mask, rho = 0.9, scale=50):
     sigma = calc_sigma(pred_m)
-    c_alpha = - 2 * torch.log(1-rho)
+    c_alpha = - 2 * torch.log(torch.tensor(1.0)-rho)
     det = torch.det(sigma)
     c_ =  quadratic_func(gt_pos - pr_pos, sigma.inverse()) / det #c prime
 
