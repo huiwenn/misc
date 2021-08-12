@@ -268,16 +268,23 @@ def train():
 
 def evaluation():
     #am = ArgoverseMap()
-    
+    if args.loss == "ecco":
+        loss_f = ecco_loss
+    elif args.loss == "mis": 
+        loss_f = mis_loss
+    else: # args.loss == "nll":
+        loss_f = nll
+
     val_dataset = read_pkl_data(val_path, batch_size=args.val_batch_size, shuffle=False, repeat=False)
     
     trained_model = torch.load(model_name + '.pth')
     trained_model.eval()
     
     with torch.no_grad():
-        valid_total_loss, valid_metrics = evaluate(trained_model, val_dataset, am=am, 
-                                                   train_window=args.train_window, max_iter=len(val_dataset), 
-                                                   device=device, start_iter=args.val_batches, use_lane=args.use_lane)
+        valid_total_loss, valid_metrics = evaluate(trained_model, val_dataset, loss_f, train_window=args.val_window,
+                                                       max_iter=args.val_batches, 
+                                                       device=device, use_lane=args.use_lane, 
+                                                       batch_size=args.val_batch_size)
     
     with open('results/{}_predictions.pickle'.format(model_name), 'wb') as f:
         pickle.dump(valid_metrics, f)

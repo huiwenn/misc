@@ -123,7 +123,8 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     
     result = {}
     de = {}
-    
+    coverage = {}
+
     for k, v in prediction_gt.items():
         #print('outputs', v[0], v[1])
         #M = v[0][:,2:].reshape(v[0].shape[0],2,2)
@@ -131,14 +132,23 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         #print('sigma',sig)
         de[k] = torch.sqrt((v[0][:,0] - v[1][:,0])**2 + 
                         (v[0][:,1] - v[1][:,1])**2)
+        coverage[k] = get_coverage(v[0][:,:2], v[1], v[0][:,2:].reshape(30,2,2)) #pr_pos, gt_pos, pred_m, car_mask)  
+  
         
     ade = []
-
     for k, v in de.items():
         ade.append(np.mean(v.numpy()))
+    
+    acoverage = []
+    for k, v in coverage.items():
+        acoverage.append(np.mean(v.numpy())*100)
+
+
     result['loss'] = total_loss.detach().cpu().numpy()
     result['ADE'] = np.mean(ade)
     result['ADE_std'] = np.std(ade)
+    result['coverage'] = np.mean(acoverage)
+    result['cov_std'] = np.std(acoverage)
 
     if train_window >= 29:
         de1s = []

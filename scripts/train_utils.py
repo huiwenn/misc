@@ -34,9 +34,6 @@ def ecco_loss(pr_pos, gt_pos, pred_m, car_mask):
 
 def mis_loss(pr_pos, gt_pos, pred_m, car_mask, rho = 0.9, scale=1):
     sigma = calc_sigma(pred_m)
-    #print("sigmas",sigma)
-    #print("pr_pos", pr_pos)
-    #print("gt_pos", gt_pos)
     c_alpha = - 2 * torch.log(torch.tensor(1.0)-rho)
     det = torch.det(sigma)
     c_ =  quadratic_func(gt_pos - pr_pos, sigma.inverse()) / det #c prime
@@ -45,6 +42,10 @@ def mis_loss(pr_pos, gt_pos, pred_m, car_mask, rho = 0.9, scale=1):
     c_delta = torch.where(c_delta > torch.tensor(0, device=c_delta.device), c_delta, torch.zeros(c_delta.shape, device=c_delta.device))
 
     mrs = torch.sqrt(det) * (c_alpha + scale*c_delta/rho)
+
+    #print("sigmas",sigma)
+    #print("pr_pos", pr_pos)
+    #print("gt_pos", gt_pos)
     return torch.mean(mrs)    
 
 def quadratic_func(x, M):
@@ -71,8 +72,13 @@ def nll(pr_pos, gt_pos, pred_m, car_mask):
         + torch.log(2 * 3.1416 * torch.pow(sigma.det(), 0.5))
     return torch.mean(loss * car_mask)
 
-def coverage(pr_pos, gt_pos, pred_m, car_mask):
-    return 0
+def get_coverage(pr_pos, gt_pos, pred_m, rho = 0.9):
+    sigma = calc_sigma(pred_m)
+    contour = - 2 * torch.log(torch.tensor(1.0)-rho)
+    det = torch.det(sigma)
+    dist =  quadratic_func(gt_pos - pr_pos, sigma.inverse()) / det #c prime
+    cover = torch.where(dist < torch.tensor(0, device=dist.device), torch.ones(dist.shape, device=dist.device), torch.zeros(dist.shape, device=dist.device))
+    return torch.mean(cover)    
 
 def clean_cache(device):
     if device == torch.device('cuda'):
