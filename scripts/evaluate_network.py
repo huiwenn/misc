@@ -133,7 +133,6 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         de[k] = torch.sqrt((v[0][:,0] - v[1][:,0])**2 + 
                         (v[0][:,1] - v[1][:,1])**2)
         coverage[k] = get_coverage(v[0][:,:2], v[1], v[0][:,2:].reshape(30,2,2)) #pr_pos, gt_pos, pred_m, car_mask)  
-  
         
     ade = []
     for k, v in de.items():
@@ -141,29 +140,40 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     
     acoverage = []
     for k, v in coverage.items():
-        acoverage.append(np.mean(v.numpy())*100)
+        acoverage.append(np.mean(v.numpy()))
 
 
     result['loss'] = total_loss.detach().cpu().numpy()
     result['ADE'] = np.mean(ade)
     result['ADE_std'] = np.std(ade)
     result['coverage'] = np.mean(acoverage)
-    result['cov_std'] = np.std(acoverage)
 
     if train_window >= 29:
         de1s = []
         de2s = []
         de3s = []
+        cov1s = []
+        cov2s = []
+        cov3s = []
         for k, v in de.items():
             de1s.append(v.numpy()[10])
             de2s.append(v.numpy()[20])
             de3s.append(v.numpy()[-1])
+        for k,v in coverage.items():
+            cov1s.append(np.mean(v[:10].numpy()))
+            cov2s.append(np.mean(v[10:20].numpy()))
+            cov3s.append(np.mean(v[20:30].numpy()))
+
         result['DE@1s'] = np.mean(de1s)
         result['DE@1s_std'] = np.std(de1s)
         result['DE@2s'] = np.mean(de2s)
         result['DE@2s_std'] = np.std(de2s)
         result['DE@3s'] = np.mean(de3s)
         result['DE@3s_std'] = np.std(de3s)
+        result['cov@1s'] = np.mean(cov1s)
+        result['cov@2s'] = np.mean(cov2s)
+        result['cov@3s'] = np.mean(cov3s)
+
 
     print(result)
     print('done')
