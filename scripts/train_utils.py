@@ -22,7 +22,7 @@ def loss_fn(pr_pos, gt_pos, num_fluid_neighbors, car_mask):
     gamma = 0.5
     neighbor_scale = 1 / 40
     importance = torch.exp(-neighbor_scale * num_fluid_neighbors)
-    dist = euclidean_distance(pr_pos, gt_pos)**gamma
+    dist = euclidean_distance(pr_pos[...,:2], gt_pos)**gamma
     mask_dist = dist * car_mask
     mask_dist = mask_dist[mask_dist.nonzero(as_tuple=True)] #rid zero values
     batch_losses = torch.mean(importance * mask_dist, axis=-1)
@@ -68,7 +68,7 @@ def calc_sigma(M):
 def nll(pr_pos, gt_pos, pred_m, car_mask):
     sigma = calc_sigma(pred_m)
 
-    loss = 0.5 * quadratic_func(gt_pos - pr_pos, sigma.inverse()) \
+    loss = 0.5 * quadratic_func(gt_pos - pr_pos[...,:2], sigma.inverse()) \
         + torch.log(2 * 3.1416 * torch.pow(sigma.det(), 0.5))
     return torch.mean(loss * car_mask)
 
@@ -76,7 +76,7 @@ def get_coverage(pr_pos, gt_pos, pred_m, rho = 0.9):
     sigma = calc_sigma(pred_m)
     contour = - 2 * torch.log(torch.tensor(1.0)-rho)
     det = torch.det(sigma)
-    dist =  quadratic_func(gt_pos - pr_pos, sigma.inverse()) / det #c prime
+    dist =  quadratic_func(gt_pos - pr_pos, sigma.inverse()) / det 
     cover = torch.where(dist < torch.tensor(contour, device=dist.device), torch.ones(dist.shape, device=dist.device), torch.zeros(dist.shape, device=dist.device))
     return cover    
 

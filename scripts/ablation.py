@@ -7,7 +7,7 @@ import time
 import pickle
 import argparse
 import datetime
-from evaluate_network import evaluate
+from evaluate_ablation import evaluate
 #from argoverse.map_representation.map_api import ArgoverseMap
 from datasets.argoverse_lane_loader import read_pkl_data
 from train_utils import *
@@ -63,11 +63,9 @@ val_path = os.path.join(args.dataset_path, 'val') #, 'lane_data'
 train_path = os.path.join(args.dataset_path, 'train') #, 'lane_data'
     
 def create_model():
-    from models.cstcov import CstcovModel
+    from models.cstcov import ParticlesNetwork
     """Returns an instance of the network for training and evaluation"""
-    model = CstcovModel(radius_scale = 40,
-                        layer_channels = [32, 64, 64, 64,3], 
-                        encoder_hidden_size=23)
+    model = ParticlesNetwork()
 
     return model
 
@@ -117,9 +115,17 @@ def train():
 
         batch_size = args.batch_size
         if not args.use_lane:
-            batch['lane'] = torch.zeros(batch_size, 1, 2, device=device)
-            batch['lane_norm'] = torch.zeros(batch_size, 1, 2, device=device)
+            batch['lane'] = torch.zeros(batch_size, 1, 3, device=device)
+            batch['lane_norm'] = torch.zeros(batch_size, 1, 3, device=device)
             batch['lane_mask'] = torch.ones(batch_size, 1, 1, device=device)
+
+        pos_zero = torch.unsqueeze(torch.zeros(batch['pos0'].shape[:-1], device=device),-1)
+        batch['pos0'] = torch.cat([batch['pos0'], pos_zero], dim = -1)
+        batch['vel0'] = torch.cat([batch['vel0'], pos_zero], dim = -1)
+
+        batch['accel'] = torch.cat([batch['accel'], torch.zeros(batch['accel'].shape[:-1],device=device).unsqueeze(-1)], dim = -1)
+        zero_2s = torch.unsqueeze(torch.zeros(batch['vel_2s'].shape[:-1], device=device),-1)
+        batch['vel_2s'] = torch.cat([batch['vel_2s'], zero_2s], dim = -1)
 
         inputs = ([
             batch['pos_2s'], batch['vel_2s'],
@@ -141,6 +147,7 @@ def train():
         pos0 = batch['pos0']
         vel0 = batch['vel0']
         m0 = torch.zeros((batch_size, 60, 2, 2), device=device)
+
         for i in range(train_window-1):
             pos_enc = torch.unsqueeze(pos0, 2)
             vel_enc = torch.unsqueeze(vel0, 2)

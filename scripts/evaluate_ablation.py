@@ -40,12 +40,19 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
 
         data = process_batch(sample, device)
 
-        if use_lane:
-            pass
-        else:
-            sample['lane_mask'] = [np.array([0])] * batch_size
-            data['lane'], data['lane_norm'] = torch.zeros(batch_size, 1, 2, device=device), torch.zeros(batch_size, 1, 2, device=device)
+        if not use_lane:
+            data['lane'] = torch.zeros(batch_size, 1, 3, device=device)
+            data['lane_norm'] = torch.zeros(batch_size, 1, 3, device=device)
             data['lane_mask'] = torch.ones(batch_size, 1, 1, device=device)
+
+        pos_zero = torch.unsqueeze(torch.zeros(data['pos0'].shape[:-1], device=device),-1)
+        data['pos0'] = torch.cat([data['pos0'], pos_zero], dim = -1)
+        data['vel0'] = torch.cat([data['vel0'], pos_zero], dim = -1)
+
+        data['accel'] = torch.cat([data['accel'], torch.zeros(data['accel'].shape[:-1],device=device).unsqueeze(-1)], dim = -1)
+        zero_2s = torch.unsqueeze(torch.zeros(data['vel_2s'].shape[:-1], device=device),-1)
+        data['vel_2s'] = torch.cat([data['vel_2s'], zero_2s], dim = -1)
+
         
 
         lane = data['lane']
@@ -132,7 +139,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         #print('sigma',sig)
         de[k] = torch.sqrt((v[0][:,0] - v[1][:,0])**2 + 
                         (v[0][:,1] - v[1][:,1])**2)
-        coverage[k] = get_coverage(v[0][:,:2], v[1], v[0][:,2:].reshape(train_window,2,2)) #pr_pos, gt_pos, pred_m, car_mask)  
+        coverage[k] = get_coverage(v[0][:,:2], v[1], v[0][:,3:].reshape(train_window,2,2)) #pr_pos, gt_pos, pred_m, car_mask)  
         
     ade = []
     for k, v in de.items():
