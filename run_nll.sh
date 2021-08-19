@@ -1,2 +1,2 @@
-echo yes | conda install pytorch cudatoolkit=10.2 -c pytorch 
+echo yes | conda install open3d torch==1.7.0 cudatoolkit=10.2 screen -c pytorch 
 python scripts/train.py --dataset_path /data/argoverse --rho-reg --batch_size 12 --val_batch_size 12 --train --model_name nll_nautilus --batches_per_epoch 600 --val_batches 50 --epochs 100 --loss nll
