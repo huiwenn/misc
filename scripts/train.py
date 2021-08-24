@@ -178,12 +178,13 @@ def train():
     valid_metrics_list = []
     min_loss = None
     
+    trace = torch.profiler.tensorboard_trace_handler("./profile")
     with torch.profiler.profile(schedule=torch.profiler.schedule(
             wait=2,
             warmup=2,
             active=6,
             repeat=1),
-        on_trace_ready=torch.profiler.tensorboard_trace_handler("profile/" + model_name),
+        on_trace_ready=trace,
         with_stack=True
     ) as profiler:
     #---
@@ -270,6 +271,8 @@ def train():
             writer.flush()
 
             scheduler.step()
+            profiler.step()
+
     #---
     writer.close()
 
