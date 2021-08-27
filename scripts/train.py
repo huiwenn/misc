@@ -21,7 +21,7 @@ from torch.utils.tensorboard import SummaryWriter
 #os.environ["NCCL_DEBUG"] = "INFO"
 
 parser = argparse.ArgumentParser(description="Training setting and hyperparameters")
-parser.add_argument('--cuda_visible_devices', default='0,1,2,3')
+parser.add_argument('--cuda_visible_devices', default='0,1,2,3,4,5,6,7')
 parser.add_argument('--dataset_path', default='/path/to/argoverse_forecasting/', 
                     help='path to dataset folder, which contains train and val folders')
 parser.add_argument('--train_window', default=6, type=int, help='how many timestamps to iterate in training')
@@ -293,9 +293,8 @@ def evaluation():
     else: # args.loss == "nll":
         loss_f = nll
 
-    #val_dataset = read_pkl_data(val_path, batch_size=args.val_batch_size, shuffle=False, repeat=False)
-    dataset = read_pkl_data(train_path, batch_size=args.batch_size / args.batch_divide,
-                            repeat=True, shuffle=True, max_lane_nodes=900)
+    val_dataset = read_pkl_data(val_path, batch_size=args.val_batch_size, shuffle=False, repeat=False)
+    #dataset = read_pkl_data(train_path, batch_size=args.batch_size / args.batch_divide, repeat=True, shuffle=True, max_lane_nodes=900)
 
 
     trained_model = torch.load(model_name + '.pth')
@@ -303,7 +302,7 @@ def evaluation():
     
     with torch.no_grad():
         # change back to val_dataset
-        valid_total_loss, valid_metrics = evaluate(trained_model, dataset, loss_f, train_window=args.val_window,
+        valid_total_loss, valid_metrics = evaluate(trained_model, val_dataset, loss_f, train_window=args.val_window,
                                                        max_iter=args.val_batches, 
                                                        device=device, use_lane=args.use_lane, 
                                                        batch_size=args.val_batch_size)

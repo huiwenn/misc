@@ -122,7 +122,6 @@ class ECCONetwork(nn.Module):
         """Precondition: p and v were updated with accerlation"""
 
         fluid_feats = [v.unsqueeze(-2)]
-        
         if not other_feats is None:
             fluid_feats.append(other_feats)
         fluid_feats = torch.cat(fluid_feats, -2)
@@ -197,6 +196,8 @@ class ECCONetwork(nn.Module):
         m_matrix = pos_correction[..., 1:, :]
 
         # return output channels after the first one
+        if other_feats is None:
+            return p_corrected, v_corrected, m_matrix, (feats, None)
         return p_corrected, v_corrected, m_matrix, (feats[..., other_feats.shape[-2]:,:], None)
 
 
