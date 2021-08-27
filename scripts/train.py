@@ -99,6 +99,13 @@ def train():
 
     data_iter = iter(dataset)
 
+    if args.load_model_path:
+        print('loading model from ' + args.load_model_path)
+        model_ = torch.load(args.load_model_path + '.pth')
+        model = model_
+    else:
+        model = create_model().to(device)
+    
     if args.loss == "ecco":
         loss_f = ecco_loss
     elif args.loss == "mis": 
@@ -106,12 +113,6 @@ def train():
     else: # args.loss == "nll":
         loss_f = nll
 
-    if args.load_model_path:
-        print('loading model from ' + args.load_model_path)
-        model_ = torch.load(args.load_model_path + '.pth')
-        model = model_
-    else:
-        model = create_model().to(device)
 
     model = MyDataParallel(model)
     optimizer = torch.optim.Adam(model.parameters(), args.base_lr,betas=(0.9, 0.999), weight_decay=4e-4)
@@ -293,7 +294,8 @@ def evaluation():
     trained_model.eval()
     
     with torch.no_grad():
-        valid_total_loss, valid_metrics = evaluate(trained_model, val_dataset, loss_f, train_window=args.val_window,
+        # change back to val_dataset
+        valid_total_loss, valid_metrics = evaluate(trained_model, dataset, loss_f, train_window=args.val_window,
                                                        max_iter=args.val_batches, 
                                                        device=device, use_lane=args.use_lane, 
                                                        batch_size=args.val_batch_size)
