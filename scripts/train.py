@@ -288,8 +288,11 @@ def evaluation():
     else: # args.loss == "nll":
         loss_f = nll
 
-    val_dataset = read_pkl_data(val_path, batch_size=args.val_batch_size, shuffle=False, repeat=False)
-    
+    #val_dataset = read_pkl_data(val_path, batch_size=args.val_batch_size, shuffle=False, repeat=False)
+    dataset = read_pkl_data(train_path, batch_size=args.batch_size / args.batch_divide,
+                            repeat=True, shuffle=True, max_lane_nodes=900)
+
+
     trained_model = torch.load(model_name + '.pth')
     trained_model.eval()
     
