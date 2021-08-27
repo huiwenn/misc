@@ -24,7 +24,7 @@ parser = argparse.ArgumentParser(description="Training setting and hyperparamete
 parser.add_argument('--cuda_visible_devices', default='0,1,2,3')
 parser.add_argument('--dataset_path', default='/path/to/argoverse_forecasting/', 
                     help='path to dataset folder, which contains train and val folders')
-parser.add_argument('--train_window', default=4, type=int, help='how many timestamps to iterate in training')
+parser.add_argument('--train_window', default=6, type=int, help='how many timestamps to iterate in training')
 parser.add_argument('--val_window', default=30, type=int, help='how many timestamps to iterate in validation')
 parser.add_argument('--batch_divide', default=1, type=int, 
                     help='divide one batch into several packs, and train them iterativelly.')
@@ -66,6 +66,7 @@ def create_model():
     if args.representation:
         from models.rho_reg_ECCO import ECCONetwork
         """Returns an instance of the network for training and evaluation"""
+        
         model = ECCONetwork(radius_scale = 40,
                             layer_channels = [8, 16, 8, 8, 3], 
                             encoder_hidden_size=23)
@@ -139,7 +140,8 @@ def train():
         pr_pos1, pr_vel1, pr_m1, states = model(inputs)
 
         # test todo
-        # pr_m1 = torch.zeros((batch_size, 60, 2, 2), device=device) 
+        if args.loss == "ecco":
+            pr_m1 = torch.zeros((batch_size, 60, 2, 2), device=device) 
 
         gt_pos1 = batch['pos1']
 
@@ -147,13 +149,14 @@ def train():
         del gt_pos1
         pos0 = batch['pos0']
         vel0 = batch['vel0']
-        m0 = torch.zeros((batch_size, 60, 2, 2), device=device)
+        m0 = torch.zeros((pr_m1.shape[0], 60, 2, 2), device=device)
         for i in range(train_window-1):
             pos_enc = torch.unsqueeze(pos0, 2)
             vel_enc = torch.unsqueeze(vel0, 2)
             
             # test todo 
-            #pr_m1 = torch.zeros((batch_size, 60, 2, 2), device=pos0.device) 
+            if args.loss == "ecco":
+                pr_m1 = torch.zeros((batch_size, 60, 2, 2), device=m0.device) 
             
             inputs = (pos_enc, vel_enc, pr_pos1, pr_vel1, batch['accel'],
                       torch.cat([m0, pr_m1], dim=-2), 
@@ -168,7 +171,7 @@ def train():
             
             losses += loss_f(pr_pos1, gt_pos1, pr_m1, batch['car_mask'].squeeze(-1))
 
-        total_loss = torch.sum(losses,axis=0) / (train_window)
+        total_loss = torch.sum(losses, axis=0) / (train_window)
         return total_loss
     
     epochs = args.epochs
@@ -178,7 +181,8 @@ def train():
     valid_losses = []
     valid_metrics_list = []
     min_loss = None
-    
+
+    '''
     trace = torch.profiler.tensorboard_trace_handler("./profile")
     with torch.profiler.profile(schedule=torch.profiler.schedule(
             wait=2,
@@ -188,91 +192,92 @@ def train():
         on_trace_ready=trace,
         with_stack=True
     ) as profiler:
+    '''
     #---
-        for i in range(epochs):
-            print("training ... epoch " + str(i + 1), end='', flush=True)
-            epoch_start_time = time.time()
+    for i in range(epochs):
+        print("training ... epoch " + str(i + 1), end='', flush=True)
+        epoch_start_time = time.time()
 
-            model.train()
-            epoch_train_loss = 0 
-            sub_idx = 0
+        model.train()
+        epoch_train_loss = 0
+        sub_idx = 0
 
-            for batch_itr in range(batches_per_epoch * args.batch_divide):
+        for batch_itr in range(batches_per_epoch * args.batch_divide):
 
-                data_fetch_start = time.time()
-                batch = next(data_iter)
+            data_fetch_start = time.time()
+            batch = next(data_iter)
 
-                if sub_idx == 0:
-                    optimizer.zero_grad()
-                    if (batch_itr // args.batch_divide) % 10 == 0:
-                        print("... batch " + str((batch_itr // args.batch_divide) + 1), end='', flush=True)
-                sub_idx += 1
-                
-                batch_tensor = process_batch(batch, device, train_window=args.train_window)
-                del batch
+            if sub_idx == 0:
+                optimizer.zero_grad()
+                if (batch_itr // args.batch_divide) % 10 == 0:
+                    print("... batch " + str((batch_itr // args.batch_divide) + 1), end='', flush=True)
+            sub_idx += 1
 
-                data_fetch_latency = time.time() - data_fetch_start
-                data_load_times.append(data_fetch_latency)
-                
-                current_loss = train_one_batch(model, batch_tensor, loss_f, train_window=args.train_window)
-                
-                if sub_idx < args.batch_divide:
-                    current_loss.backward(retain_graph=True)
-                else:
-                    current_loss.backward()
-                    optimizer.step()
-                    sub_idx = 0
-                del batch_tensor
+            batch_tensor = process_batch(batch, device, train_window=args.train_window)
+            del batch
 
-                epoch_train_loss += float(current_loss)
-                
-                # test todo
-                # print('current loss', float(current_loss))
-                
-                del current_loss
-                clean_cache(device)
+            data_fetch_latency = time.time() - data_fetch_start
+            data_load_times.append(data_fetch_latency)
 
-                if batch_itr == batches_per_epoch - 1:
-                    print("... DONE", flush=True)
+            current_loss = train_one_batch(model, batch_tensor, loss_f, train_window=args.train_window)
 
-            epoch_train_loss = epoch_train_loss/(batches_per_epoch * args.batch_divide)
-            train_losses.append(epoch_train_loss)
+            if sub_idx < args.batch_divide:
+                current_loss.backward(retain_graph=True)
+            else:
+                current_loss.backward()
+                optimizer.step()
+                sub_idx = 0
+            del batch_tensor
 
-            model.eval()
-            with torch.no_grad():
-                print('loading validation dataset')
-                val_dataset = read_pkl_data(val_path, batch_size=args.val_batch_size, shuffle=False, repeat=False)
-                valid_total_loss, _ = evaluate(model.module, val_dataset, loss_f, train_window=args.val_window,
-                                                        max_iter=args.val_batches, 
-                                                        device=device, use_lane=args.use_lane, 
-                                                        batch_size=args.val_batch_size)
+            epoch_train_loss += float(current_loss)
+
+            # test todo
+            # print('current loss', float(current_loss))
+
+            del current_loss
+            clean_cache(device)
+
+            if batch_itr == batches_per_epoch - 1:
+                print("... DONE", flush=True)
+
+        epoch_train_loss = epoch_train_loss/(batches_per_epoch * args.batch_divide)
+        train_losses.append(epoch_train_loss)
+
+        model.eval()
+        with torch.no_grad():
+            print('loading validation dataset')
+            val_dataset = read_pkl_data(val_path, batch_size=args.val_batch_size, shuffle=False, repeat=False)
+            valid_total_loss, _ = evaluate(model.module, val_dataset, loss_f, train_window=args.val_window,
+                                                    max_iter=args.val_batches,
+                                                    device=device, use_lane=args.use_lane,
+                                                    batch_size=args.val_batch_size)
 
 
-            valid_losses.append(float(valid_total_loss))
+        valid_losses.append(float(valid_total_loss))
 
-            if min_loss is None:
-                min_loss = valid_losses[-1]
+        if min_loss is None:
+            min_loss = valid_losses[-1]
 
-            if valid_losses[-1] < min_loss:
-                print('update weights')
-                min_loss = valid_losses[-1] 
-                best_model = model
-                torch.save(model.module, model_name + ".pth")
+        if valid_losses[-1] < min_loss:
+            print('update weights')
+            min_loss = valid_losses[-1]
+            best_model = model
+            torch.save(model.module, model_name + ".pth")
 
-            epoch_end_time = time.time()
+        epoch_end_time = time.time()
 
-            print('epoch: {}, train loss: {}, val loss: {}, epoch time: {}, lr: {}, {}'.format(
-                i + 1, train_losses[-1], valid_losses[-1], 
-                round((epoch_end_time - epoch_start_time) / 60, 5), 
-                format(get_lr(optimizer), "5.2e"), model_name
-            ))
+        print('epoch: {}, train loss: {}, val loss: {}, epoch time: {}, lr: {}, {}'.format(
+            i + 1, train_losses[-1], valid_losses[-1],
+            round((epoch_end_time - epoch_start_time) / 60, 5),
+            format(get_lr(optimizer), "5.2e"), model_name
+        ))
 
-            writer.add_scalar("Loss/train", train_losses[-1], i)
-            writer.add_scalar("Loss/validation", valid_losses[-1], i)
-            writer.flush()
+        writer.add_scalar("Loss/train", train_losses[-1], i)
+        writer.add_scalar("Loss/validation", valid_losses[-1], i)
+        writer.flush()
 
-            scheduler.step()
-            profiler.step()
+        scheduler.step()
+        #profiler.step()
 
     #---
     writer.close()

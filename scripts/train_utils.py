@@ -74,10 +74,10 @@ def nll(pr_pos, gt_pos, pred_m, car_mask):
 
 def get_coverage(pr_pos, gt_pos, pred_m, rho = 0.9):
     sigma = calc_sigma(pred_m)
-    contour = - 2 * torch.log(torch.tensor(1.0)-rho)
     det = torch.det(sigma)
     dist =  quadratic_func(gt_pos - pr_pos, sigma.inverse()) / det 
-    cover = torch.where(dist < torch.tensor(contour, device=dist.device), torch.ones(dist.shape, device=dist.device), torch.zeros(dist.shape, device=dist.device))
+    contour = - 2 * torch.log(torch.tensor(1.0, device=dist.device)-rho)
+    cover = torch.where(dist < contour, torch.ones(dist.shape, device=dist.device), torch.zeros(dist.shape, device=dist.device))
     return cover    
 
 def clean_cache(device):
