@@ -194,10 +194,6 @@ class ECCONetwork(nn.Module):
         # the 1st output channel is correction
         # pos_correction.squeeze(-2))
         p_corrected, v_corrected = self.apply_correction(p0, p1, pos_correction[..., 0, :])
-        #print('pos_correction', pos_correction)
-        #print('v0', v0[...,:2,:])
-        #print('pv corrected', p_corrected[...,:2,:], v_corrected[...,:2,:])
-
         m_matrix = pos_correction[..., 1:, :]
 
         # return output channels after the first one
