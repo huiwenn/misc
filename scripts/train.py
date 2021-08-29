@@ -4,6 +4,7 @@ import sys
 sys.path.append('..')
 from collections import namedtuple
 import time
+import json
 import pickle
 import argparse
 import datetime
@@ -247,7 +248,7 @@ def train():
         with torch.no_grad():
             print('loading validation dataset')
             val_dataset = read_pkl_data(val_path, batch_size=args.val_batch_size, shuffle=False, repeat=False)
-            valid_total_loss, _ = evaluate(model.module, val_dataset, loss_f, train_window=args.val_window,
+            valid_total_loss, _, _ = evaluate(model.module, val_dataset, loss_f, train_window=args.val_window,
                                                     max_iter=args.val_batches,
                                                     device=device, use_lane=args.use_lane,
                                                     batch_size=args.val_batch_size)
@@ -302,13 +303,18 @@ def evaluation():
     
     with torch.no_grad():
         # change back to val_dataset
-        valid_total_loss, valid_metrics = evaluate(trained_model, val_dataset, loss_f, train_window=args.val_window,
+        valid_total_loss, prediction_gt, valid_metrics = evaluate(trained_model, val_dataset, loss_f, train_window=args.val_window,
                                                        max_iter=args.val_batches, 
                                                        device=device, use_lane=args.use_lane, 
                                                        batch_size=args.val_batch_size)
     
     with open('results/{}_predictions.pickle'.format(model_name), 'wb') as f:
-        pickle.dump(valid_metrics, f)
+        pickle.dump(prediction_gt, f)
+
+    for k,v in valid_metrics.items():
+        valid_metrics[k] = v.tolist()
+    with open('results/{}_metrics.json'.format(model_name), 'w') as f:
+        json.dump(valid_metrics, f)
         
         
 if __name__ == '__main__':

@@ -20,10 +20,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     count = 0
     prediction_gt = {}
     losses = 0
-
     for i, sample in enumerate(val_dataset):
-
-        
         if i >= max_iter:
             break
         
@@ -113,7 +110,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
             pred.append(pr_agent.unsqueeze(1).detach().cpu())
             gt.append(gt_agent.unsqueeze(1).detach().cpu())
             
-            clean_cache(device)
+            #clean_cache(device)
 
         predict_result = (torch.cat(pred, axis=1), torch.cat(gt, axis=1))
         for idx, scene_id in enumerate(scenes):
@@ -126,7 +123,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     coverage = {}
 
     for k, v in prediction_gt.items():
-        #print('outputs', v[0], v[1])
+        print('outputs', v[0], v[1])
         #M = v[0][:,2:].reshape(v[0].shape[0],2,2)
         #sig = calc_sigma(M)
         #print('sigma',sig)
@@ -178,7 +175,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     print(result)
     print('done')
 
-    return total_loss, prediction_gt
+    return total_loss, prediction_gt, result
 
 
 
