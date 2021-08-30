@@ -123,7 +123,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     coverage = {}
 
     for k, v in prediction_gt.items():
-        print('outputs', v[0], v[1])
+        #print('outputs', v[0], v[1])
         #M = v[0][:,2:].reshape(v[0].shape[0],2,2)
         #sig = calc_sigma(M)
         #print('sigma',sig)

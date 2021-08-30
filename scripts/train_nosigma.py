@@ -21,7 +21,7 @@ from torch.utils.tensorboard import SummaryWriter
 #os.environ["NCCL_DEBUG"] = "INFO"
 
 parser = argparse.ArgumentParser(description="Training setting and hyperparameters")
-parser.add_argument('--cuda_visible_devices', default='0,1,2,3')
+parser.add_argument('--cuda_visible_devices', default='0,1,2,3,4,5,6,7')
 parser.add_argument('--dataset_path', default='/path/to/argoverse_forecasting/', 
                     help='path to dataset folder, which contains train and val folders')
 parser.add_argument('--train_window', default=6, type=int, help='how many timestamps to iterate in training')

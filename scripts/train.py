@@ -259,7 +259,7 @@ def train():
         if min_loss is None:
             min_loss = valid_losses[-1]
 
-        if valid_losses[-1] < min_loss:
+        if valid_losses[-1] <= min_loss:
             print('update weights')
             min_loss = valid_losses[-1]
             best_model = model

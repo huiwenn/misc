@@ -135,9 +135,50 @@ def process_batch(batch, device, train_window = 30):
 
     p_out = np.stack(batch['p_out'])
     v_out = np.stack(batch['v_out'])
-    for k in range(train_window):
+    for k in range(30):
         batch_tensor['pos' + str(k+1)] = torch.tensor(p_out[:, :, k, :], dtype=torch.float32, device=device)
         batch_tensor['vel' + str(k+1)] = torch.tensor(v_out[:, :, k, :], dtype=torch.float32, device=device)
+
+    for k in ['car_mask', 'lane_mask']:
+        batch_tensor[k] = torch.tensor(np.stack(batch[k]), dtype=torch.float32, device=device).unsqueeze(-1)
+
+    track_id = np.stack(batch['track_id'])
+    for k in range(30):
+        batch_tensor['track_id' + str(k)] = track_id[..., k, :]
+
+    for k in ['city', 'agent_id', 'scene_idx']:
+        batch_tensor[k] = np.stack(batch[k])
+    
+    batch_tensor['agent_id'] = batch_tensor['agent_id'][:, np.newaxis]
+
+    batch_tensor['car_mask'] = batch_tensor['car_mask'].squeeze(-1)
+    accel = torch.zeros(batch_size, 1, 2).to(device)
+    batch_tensor['accel'] = accel
+
+    # batch sigmas: starting with two zero 2x2 matrices
+    batch_tensor['sigmas'] = torch.zeros(batch_size, 60, 4, 2).to(device)
+
+    return batch_tensor
+
+
+def process_batch_mod(batch, device, train_window = 30): 
+    '''processing script for new dataset'''
+    batch_size = len(batch['city'])
+
+    batch['lane_mask'] = [np.array([0])] * batch_size
+
+    batch_tensor = {}
+
+    for k in ['lane', 'lane_norm']:
+        batch_tensor[k] = torch.tensor(np.stack(batch[k]), dtype=torch.float32, device=device)
+
+    pos_2s = torch.tensor(batch['p_in'], dtype=torch.float32, device=device)
+    vel_2s = torch.tensor(batch['v_in'], dtype=torch.float32, device=device)
+    batch_tensor['pos_2s'] = pos_2s
+    batch_tensor['vel_2s'] = vel_2s
+
+    batch_tensor['p_out'] = torch.tensor(batch['p_out'], dtype=torch.float32, device=device)
+    batch_tensor['v_out'] = torch.tensor(batch['v_out'], dtype=torch.float32, device=device)
 
     for k in ['car_mask', 'lane_mask']:
         batch_tensor[k] = torch.tensor(np.stack(batch[k]), dtype=torch.float32, device=device).unsqueeze(-1)

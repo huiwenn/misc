@@ -4,6 +4,7 @@ import sys
 sys.path.append('..')
 from collections import namedtuple
 import time
+import json
 import pickle
 import argparse
 import datetime
@@ -128,10 +129,18 @@ def train():
             batch['lane'] = torch.zeros(batch_size, 1, 2, device=device)
             batch['lane_norm'] = torch.zeros(batch_size, 1, 2, device=device)
             batch['lane_mask'] = torch.ones(batch_size, 1, 1, device=device)
-
+        
+        #random starting pos
+        randstart = torch.randint(19,(1,), device=device)
+        newpos = torch.cat((batch['pos_2s'][...,randstart+1:,:], batch['p_out'][...,:randstart,:]), dim=-2)
+        newvel = torch.cat((batch['vel_2s'][...,randstart+1:,:], batch['v_out'][...,:randstart,:]), dim=-2)
+        #print('int',randstart)
+        #print('newpos',newpos.shape)
+        newpos1 = torch.squeeze(batch['p_out'][...,randstart,:],-2)
+        newvel1 = torch.squeeze(batch['v_out'][...,randstart,:],-2)
         inputs = ([
-            torch.cat(batch['pos_2s'], batch['pos1'][...,:-1,:], dim=-2) ,torch.cat(batch['vel_2s'][...,:-1,:], batch['vel1'], dim=-2) ,
-            batch['pos1'], batch['vel1'], 
+             newpos, newvel ,
+            newpos1, newvel1, 
             batch['accel'], batch['sigmas'], #other feats: 4x2 two M matrices
             batch['lane'], batch['lane_norm'], 
             batch['car_mask'], batch['lane_mask']
@@ -143,12 +152,12 @@ def train():
         if args.loss == "ecco":
             pr_m1 = torch.zeros((batch_size, 60, 2, 2), device=device) 
 
-        gt_pos1 = batch['pos2']
+        gt_pos1 = torch.squeeze(batch['p_out'][...,randstart+1,:],-2)
 
         losses = loss_f(pr_pos1, gt_pos1, pr_m1, batch['car_mask'].squeeze(-1))
         del gt_pos1
-        pos0 = batch['pos1']
-        vel0 = batch['vel1']
+        pos0 = torch.squeeze(batch['p_out'][...,randstart+1,:],-2)
+        vel0 = torch.squeeze(batch['v_out'][...,randstart+1,:],-2)
         m0 = torch.zeros((pr_m1.shape[0], 60, 2, 2), device=device)
         for i in range(1, train_window):
             pos_enc = torch.unsqueeze(pos0, 2)
@@ -167,7 +176,7 @@ def train():
             # del pos_enc, vel_enc
             
             pr_pos1, pr_vel1, pr_m1, states = model(inputs, states)
-            gt_pos1 = batch['pos'+str(i+2)]
+            gt_pos1 = torch.squeeze(batch['p_out'][...,randstart+i+1,:],-2)
             
             losses += loss_f(pr_pos1, gt_pos1, pr_m1, batch['car_mask'].squeeze(-1))
 
@@ -213,7 +222,7 @@ def train():
                     print("... batch " + str((batch_itr // args.batch_divide) + 1), end='', flush=True)
             sub_idx += 1
 
-            batch_tensor = process_batch(batch, device, train_window=args.train_window)
+            batch_tensor = process_batch_mod(batch, device, train_window=args.train_window)
             del batch
 
             data_fetch_latency = time.time() - data_fetch_start
@@ -247,7 +256,7 @@ def train():
         with torch.no_grad():
             print('loading validation dataset')
             val_dataset = read_pkl_data(val_path, batch_size=args.val_batch_size, shuffle=False, repeat=False)
-            valid_total_loss, _ = evaluate(model.module, val_dataset, loss_f, train_window=args.val_window,
+            valid_total_loss, _ ,_ = evaluate(model.module, val_dataset, loss_f, train_window=args.val_window,
                                                     max_iter=args.val_batches,
                                                     device=device, use_lane=args.use_lane,
                                                     batch_size=args.val_batch_size)
@@ -258,7 +267,7 @@ def train():
         if min_loss is None:
             min_loss = valid_losses[-1]
 
-        if valid_losses[-1] < min_loss:
+        if valid_losses[-1] <= min_loss:
             print('update weights')
             min_loss = valid_losses[-1]
             best_model = model
@@ -309,6 +318,10 @@ def evaluation():
     
     with open('results/{}_predictions.pickle'.format(model_name), 'wb') as f:
         pickle.dump(valid_metrics, f)
+    for k,v in valid_metrics.items():
+        valid_metrics[k] = v.tolist()
+    with open('results/{}_metrics.json'.format(model_name), 'w') as f:
+        json.dump(valid_metrics, f)
         
         
 if __name__ == '__main__':
