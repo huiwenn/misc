@@ -1,0 +1,3 @@
+python scripts/train.py --dataset_path ../argoverse_data --rho-reg --val_batch_size 1 --evaluation --model_name lane_nll --batches_per_epoch 1 --val_batches 100
+python scripts/train.py --dataset_path ../argoverse_data --rho-reg --val_batch_size 1 --evaluation --model_name nll_nautilus --batches_per_epoch 1 --val_batches 100
+python scripts/train.py --dataset_path ../argoverse_data --rho-reg --val_batch_size 1 --evaluation --model_name lane_local --batches_per_epoch 1 --val_batches 100
