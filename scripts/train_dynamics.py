@@ -65,7 +65,7 @@ train_path = os.path.join(args.dataset_path, 'train') #, 'lane_data'
     
 def create_model():
     if args.representation:
-        from models.rho_reg_ECCO_prob import ECCONetwork
+        from models.rho_reg_ECCO import ECCONetwork
         """Returns an instance of the network for training and evaluation"""
         
         model = ECCONetwork(radius_scale = 40,
@@ -130,7 +130,7 @@ def train():
             batch['lane_norm'] = torch.zeros(batch_size, 1, 2, device=device)
             batch['lane_mask'] = torch.ones(batch_size, 1, 1, device=device)
 
-        m0 = torch.zeros((pr_m1.shape[0], 60, 2, 2), device=device)
+        m0 = torch.zeros((batch['pos_2s'].shape[0], 60, 2, 2), device=device)
 
         inputs = ([
             batch['pos_2s'], batch['vel_2s'],
@@ -161,7 +161,7 @@ def train():
                 pr_m1 = torch.zeros((batch_size, 60, 2, 2), device=m0.device) 
             
             inputs = (pos_enc, vel_enc, pr_pos1, pr_vel1, batch['accel'],
-                      pr_m1, dim=-2), 
+                      pr_m1, 
                       batch['lane'], batch['lane_norm'], 
                       batch['car_mask'], batch['lane_mask'])
 
@@ -293,7 +293,7 @@ def evaluation():
     elif args.loss == "mis": 
         loss_f = mis_loss
     else: # args.loss == "nll":
-        loss_f = nll
+        loss_f = nll_dyna
 
     val_dataset = read_pkl_data(val_path, batch_size=args.val_batch_size, shuffle=False, repeat=False)
     #dataset = read_pkl_data(train_path, batch_size=args.batch_size / args.batch_divide, repeat=True, shuffle=True, max_lane_nodes=900)
