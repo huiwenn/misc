@@ -72,6 +72,15 @@ def nll(pr_pos, gt_pos, pred_m, car_mask):
         + torch.log(2 * 3.1416 * torch.pow(sigma.det(), 0.5))
     return torch.mean(loss * car_mask)
 
+def nll_dyna(pr_pos, gt_pos, m, car_mask):
+    m0, pred_m = m
+    sigma = calc_sigma(m0) + calc_sigma(pred_m)
+
+    loss = 0.5 * quadratic_func(gt_pos - pr_pos[...,:2], sigma.inverse()) \
+        + torch.log(2 * 3.1416 * torch.pow(sigma.det(), 0.5))
+    return torch.mean(loss * car_mask)
+
+
 def get_coverage(pr_pos, gt_pos, pred_m, rho = 0.9):
     sigma = calc_sigma(pred_m)
     det = torch.det(sigma)

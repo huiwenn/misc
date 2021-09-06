@@ -162,8 +162,9 @@ class ECCONetwork(nn.Module):
 
         # scale to better match the scale of the output distribution
         # scale in pecco is (1.0 / 128) 
-        self.pos_correction = (1.0 / 4) * output
-        self.pos_correction[...,0,:] = (1.0 / 16) * self.pos_correction[...,0,:]
+        self.pos_correction = (1.0 / 128) * output
+        #self.pos_correction = (1.0 / 4) * output
+        #self.pos_correction[...,0,:] = (1.0 / 16) * self.pos_correction[...,0,:]
         return self.pos_correction
     
     def forward(self, inputs, states=None):
