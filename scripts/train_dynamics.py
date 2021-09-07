@@ -8,7 +8,7 @@ import json
 import pickle
 import argparse
 import datetime
-from evaluate_network import evaluate
+from evaluate_dynamics import evaluate
 #from argoverse.map_representation.map_api import ArgoverseMap
 from datasets.argoverse_lane_loader import read_pkl_data
 from train_utils import *
@@ -113,7 +113,7 @@ def train():
     elif args.loss == "mis": 
         loss_f = mis_loss
     else: # args.loss == "nll":
-        loss_f = nll
+        loss_f = nll_dyna
 
 
     model = MyDataParallel(model)
@@ -148,7 +148,7 @@ def train():
 
         gt_pos1 = batch['pos1']
 
-        losses = loss_f(pr_pos1, gt_pos1, pr_m1, batch['car_mask'].squeeze(-1))
+        losses = loss_f(pr_pos1, gt_pos1, (m0, pr_m1), batch['car_mask'].squeeze(-1))
         del gt_pos1
         pos0 = batch['pos0']
         vel0 = batch['vel0']
@@ -171,7 +171,7 @@ def train():
             pr_pos1, pr_vel1, pr_m1, states = model(inputs, states)
             gt_pos1 = batch['pos'+str(i+2)]
             
-            losses += loss_f(pr_pos1, gt_pos1, (pr_m0, pr_m1), batch['car_mask'].squeeze(-1))
+            losses += loss_f(pr_pos1, gt_pos1, (m0, pr_m1), batch['car_mask'].squeeze(-1))
 
         total_loss = torch.sum(losses, axis=0) / (train_window)
         return total_loss
