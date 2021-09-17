@@ -94,7 +94,6 @@ def train():
     log_dir = "runs/" + model_name + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     writer = SummaryWriter(log_dir=log_dir)
 
-
     print('loading tain dataset')
     dataset = read_pkl_data(train_path, batch_size=args.batch_size / args.batch_divide,
                             repeat=True, shuffle=True, max_lane_nodes=900)
@@ -131,24 +130,22 @@ def train():
             batch['lane_mask'] = torch.ones(batch_size, 1, 1, device=device)
 
         m0 = torch.zeros((batch['pos_2s'].shape[0], 60, 2, 2), device=device)
+        sigma0 = calc_sigma(m0)
 
         inputs = ([
             batch['pos_2s'], batch['vel_2s'],
             batch['pos0'], batch['vel0'], 
-            batch['accel'], m0, #other feats: 2x2 one M matrices
+            batch['accel'], sigma0, #other feats: 2x2 sigma matrices
             batch['lane'], batch['lane_norm'], 
             batch['car_mask'], batch['lane_mask']
         ])
     
         pr_pos1, pr_vel1, pr_m1, states = model(inputs)
 
-        # test todo
-        if args.loss == "ecco":
-            pr_m1 = torch.zeros((batch_size, 60, 2, 2), device=device) 
-
+        sigma0 = sigma0 + calc_sigma(pr_m1)
         gt_pos1 = batch['pos1']
 
-        losses = loss_f(pr_pos1, gt_pos1, (m0, pr_m1), batch['car_mask'].squeeze(-1))
+        losses = loss_f(pr_pos1, gt_pos1, sigma0, batch['car_mask'].squeeze(-1))
         del gt_pos1
         pos0 = batch['pos0']
         vel0 = batch['vel0']
@@ -156,22 +153,20 @@ def train():
             pos_enc = torch.unsqueeze(pos0, 2)
             vel_enc = torch.unsqueeze(vel0, 2)
             
-            # test todo 
-            if args.loss == "ecco":
-                pr_m1 = torch.zeros((batch_size, 60, 2, 2), device=m0.device) 
-            
             inputs = (pos_enc, vel_enc, pr_pos1, pr_vel1, batch['accel'],
-                      pr_m1, 
+                      sigma0, 
                       batch['lane'], batch['lane_norm'], 
                       batch['car_mask'], batch['lane_mask'])
 
-            pos0, vel0, m0 = pr_pos1, pr_vel1, pr_m1
+            pos0, vel0 = pr_pos1, pr_vel1
             # del pos_enc, vel_enc
             
             pr_pos1, pr_vel1, pr_m1, states = model(inputs, states)
             gt_pos1 = batch['pos'+str(i+2)]
             
-            losses += loss_f(pr_pos1, gt_pos1, (m0, pr_m1), batch['car_mask'].squeeze(-1))
+            sigma0 = sigma0 + calc_sigma(pr_m1)
+
+            losses += loss_f(pr_pos1, gt_pos1, sigma0, batch['car_mask'].squeeze(-1))
 
         total_loss = torch.sum(losses, axis=0) / (train_window)
         return total_loss
