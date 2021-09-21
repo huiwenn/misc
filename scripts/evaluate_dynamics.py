@@ -52,11 +52,12 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         scenes = data['scene_idx'].tolist()
 
         m0 = torch.zeros((data['pos_2s'].shape[0], 60, 2, 2), device=device)
+        sigma0 = calc_sigma(m0)
 
         inputs = ([
             data['pos_2s'], data['vel_2s'], 
             data['pos0'], data['vel0'], 
-            data['accel'], m0,
+            data['accel'], sigma0,
             data['lane'], data['lane_norm'], 
             data['car_mask'], data['lane_mask']
         ])
@@ -68,7 +69,8 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
 
         gt_pos1 = data['pos1']
         
-        losses = loss_f(pr_pos1, gt_pos1, (m0,pr_m1), data['car_mask'].squeeze(-1))
+        sigma0 = sigma0 + calc_sigma(pr_m1)
+        losses = loss_f(pr_pos1, gt_pos1, sigma0, data['car_mask'].squeeze(-1))
 
         pr_agent, gt_agent = get_agent(pr_pos1, data['pos1'],
                                        data['track_id0'].squeeze(-1), 
@@ -91,7 +93,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
             # pr_m1 = torch.zeros((batch_size, 60, 2, 2), device=device)
 
             inputs = (pos_enc, vel_enc, pr_pos1, pr_vel1, data['accel'],
-                      pr_m1, 
+                      sigma0, 
                       data['lane'],
                       data['lane_norm'], data['car_mask'], data['lane_mask'])
 
@@ -102,7 +104,9 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
             
 
             gt_pos1 = data['pos'+str(j+2)]
-            losses += loss_f(pr_pos1, gt_pos1, (m0,pr_m1), data['car_mask'].squeeze(-1))
+
+            sigma0 = sigma0 + calc_sigma(pr_m1)
+            losses += loss_f(pr_pos1, gt_pos1, sigma0, data['car_mask'].squeeze(-1))
 
             pr_agent, gt_agent = get_agent(pr_pos1, data['pos'+str(j+2)],
                                            data['track_id0'].squeeze(-1),
