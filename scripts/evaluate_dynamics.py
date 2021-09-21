@@ -27,6 +27,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         if i < start_iter:
             continue
         
+        sigmas = []
         pred = []
         gt = []
 
@@ -77,6 +78,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
                                        data['track_id1'].squeeze(-1), 
                                        agent_id, device, pr_m1=pr_m1)
         
+        sigmas.append(sigma0.unsqueeze(1).detach().cpu())
         pred.append(pr_agent.unsqueeze(1).detach().cpu())
         gt.append(gt_agent.unsqueeze(1).detach().cpu())
         del pr_agent, gt_agent
@@ -111,16 +113,16 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
             pr_agent, gt_agent = get_agent(pr_pos1, data['pos'+str(j+2)],
                                            data['track_id0'].squeeze(-1),
                                            data['track_id'+str(j+1)].squeeze(-1),
-                                           agent_id, device, pr_m1=pr_m1)
+                                           agent_id, device, pr_m1=sigma0)
 
             pred.append(pr_agent.unsqueeze(1).detach().cpu())
             gt.append(gt_agent.unsqueeze(1).detach().cpu())
             
             #clean_cache(device)
 
-        predict_result = (torch.cat(pred, axis=1), torch.cat(gt, axis=1))
+        predict_result = (torch.cat(pred, axis=1), torch.cat(gt, axis=1), torch.cat(sigmas,axis=1))
         for idx, scene_id in enumerate(scenes):
-            prediction_gt[scene_id] = (predict_result[0][idx], predict_result[1][idx])
+            prediction_gt[scene_id] = (predict_result[0][idx], predict_result[1][idx], predict_result[2][idx])
     
     total_loss = torch.sum(losses,axis=0) / (train_window) 
     
@@ -135,7 +137,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         #print('sigma',sig)
         de[k] = torch.sqrt((v[0][:,0] - v[1][:,0])**2 + 
                         (v[0][:,1] - v[1][:,1])**2)
-        coverage[k] = get_coverage(v[0][:,:2], v[1], v[0][:,2:].reshape(train_window,2,2)) #pr_pos, gt_pos, pred_m, car_mask)  
+        coverage[k] = get_coverage_dyna(v[0][:,:2], v[1], v[0][:,2:].reshape(train_window,2,2)) #pr_pos, gt_pos, pred_m, car_mask)  
         
     ade = []
     for k, v in de.items():

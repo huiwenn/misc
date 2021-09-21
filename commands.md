@@ -26,7 +26,7 @@ python scripts/train_mod.py --dataset_path ../argoverse_data --rho-reg --batch_s
  python scripts/train_dyna.py --dataset_path /data/argoverse --rho-reg --batch_size 12 --val_batch_size 12 --model_name nll_dyna_local --batches_per_epoch 600 --val_batches 20 --epochs 100 --loss nll --use_lane --train 
 
 
-python scripts/train_dynamics.py --dataset_path ../argoverse_data --rho-reg --batch_size 1 --val_batch_size 1 --batches_per_epoch 1200 --val_batches 45 --epoch 200 --model_name nll_dyna_local --loss nll --use_lane --train 
+python scripts/train_dynamics.py --dataset_path ../argoverse_data --rho-reg --batch_size 1 --val_batch_size 1 --batches_per_epoch 1200 --val_batches 45 --epoch 200 --model_name nll_dyna_local --loss nll --use_lane --evaluate 
 
 python scripts/train_dynamics.py --dataset_path /data/argoverse --rho-reg --batch_size 14 --val_batch_size 12 --model_name lane_nll_scaled --batches_per_epoch 600 --val_batches 20 --epochs 100  --loss nll --use_lane --train 
 
