@@ -73,7 +73,6 @@ def nll(pr_pos, gt_pos, pred_m, car_mask):
     return torch.mean(loss * car_mask)
 
 def nll_dyna(pr_pos, gt_pos, sigma, car_mask):
-
     loss = 0.5 * quadratic_func(gt_pos - pr_pos[...,:2], sigma.inverse()) \
         + torch.log(2 * 3.1416 * torch.pow(sigma.det(), 0.5))
     return torch.mean(loss * car_mask)
@@ -81,6 +80,13 @@ def nll_dyna(pr_pos, gt_pos, sigma, car_mask):
 
 def get_coverage(pr_pos, gt_pos, pred_m, rho = 0.9):
     sigma = calc_sigma(pred_m)
+    det = torch.det(sigma)
+    dist =  quadratic_func(gt_pos - pr_pos, sigma.inverse()) / det 
+    contour = - 2 * torch.log(torch.tensor(1.0, device=dist.device)-rho)
+    cover = torch.where(dist < contour, torch.ones(dist.shape, device=dist.device), torch.zeros(dist.shape, device=dist.device))
+    return cover    
+
+def get_coverage_dyna(pr_pos, gt_pos, sigma, rho = 0.9):
     det = torch.det(sigma)
     dist =  quadratic_func(gt_pos - pr_pos, sigma.inverse()) / det 
     contour = - 2 * torch.log(torch.tensor(1.0, device=dist.device)-rho)
