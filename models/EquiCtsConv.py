@@ -191,6 +191,8 @@ class EquiCtsConvBase(nn.Module, metaclass=ABCMeta):
         
         attention_field_feat = field_feat.unsqueeze(1)*attention.unsqueeze(-1)
         # attention_field_feat: [batch, num_m, num_n, c_in, 2]
+        #print('kernel_on_field', kernel_on_field.shape, 'attention_field_feat', attention_field_feat.shape)
+
         out = torch.einsum('bmnoiyx,bmnix->bmoy', kernel_on_field, attention_field_feat)
         # out: [batch, num_m, c_out, 2]
         

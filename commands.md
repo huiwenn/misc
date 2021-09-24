@@ -26,7 +26,17 @@ python scripts/train_mod.py --dataset_path ../argoverse_data --rho-reg --batch_s
  python scripts/train_dyna.py --dataset_path /data/argoverse --rho-reg --batch_size 12 --val_batch_size 12 --model_name nll_dyna_local --batches_per_epoch 600 --val_batches 20 --epochs 100 --loss nll --use_lane --train 
 
 
-python scripts/train_dynamics.py --dataset_path ../argoverse_data --rho-reg --batch_size 1 --val_batch_size 1 --batches_per_epoch 1200 --val_batches 45 --epoch 200 --model_name nll_dyna_local --loss nll --use_lane --evaluate 
+python scripts/train_dynamics.py --dataset_path ../argoverse_data --rho-reg --batch_size 1 --val_batch_size 1 --batches_per_epoch 1200 --val_batches 150 --epoch 200 --model_name dyna_local_2 --loss nll --use_lane --train --load_model_path nll_dyna_local --base_lr 0.0005
 
 python scripts/train_dynamics.py --dataset_path /data/argoverse --rho-reg --batch_size 14 --val_batch_size 12 --model_name lane_nll_scaled --batches_per_epoch 600 --val_batches 20 --epochs 100  --loss nll --use_lane --train 
 
+python scripts/ped_train_dyna.py --dataset_path ../ped_one --rho-reg --batch_size 1 --val_batch_size 1 --model_name ped_dyna_local --batches_per_epoch 1 --val_batches 1 --epochs 100 --val_window 6 --loss nll --train 
+
+python scripts/ped_train_dyna.py --dataset_path ../pedestrian --rho-reg --batch_size 1 --val_batch_size 1 --model_name ped_dyna_local --batches_per_epoch 1200 --val_batches 100 --epochs 100 --loss nll --train 
+
+{3.84 2.09 0.967}
+
+
+python scripts/ped_train.py --dataset_path ../pedestrian --rho-reg --batch_size 1 --val_batch_size 1 --model_name ped_local --batches_per_epoch 1200 --val_batches 100 --epochs 100 --loss nll --train
+
+python scripts/ped_train.py --dataset_path ../ped_one --rho-reg --batch_size 1 --val_batch_size 1 --model_name ped_local --batches_per_epoch 1 --val_batches 1 --epochs 100 --loss nll --val_window 6 --train
