@@ -6,7 +6,7 @@ import os
 
 
 class PedestrainPklLoader(dataflow.RNGDataFlow):
-    def __init__(self, data_path: str, shuffle: bool=True, max_num=400):
+    def __init__(self, data_path: str, shuffle: bool=True, max_num=60):
         super(PedestrainPklLoader, self).__init__()
         self.data_path = data_path
         self.shuffle = shuffle
@@ -19,13 +19,18 @@ class PedestrainPklLoader(dataflow.RNGDataFlow):
             self.rng.shuffle(pkl_list)
             
         for pkl_path in pkl_list:
-            with open(pkl_path, 'rb') as f:
-                data = pickle.load(f)
-            if sum(data['man_mask']) > self.max_num:
+            try:
+                with open(pkl_path, 'rb') as f:
+                    data = pickle.load(f)
+                if sum(data['man_mask']) > self.max_num:
+                    continue
+                if 'pos12' not in data.keys():
+                    continue
+                yield data
+            except:
+                print('datareading error')
                 continue
-            if 'pos12' not in data.keys():
-                continue
-            yield data
+
             
     def __len__(self):
         return len(glob(os.path.join(self.data_path, '*')))

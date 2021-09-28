@@ -120,7 +120,6 @@ class ECCONetwork(nn.Module):
 
     def compute_correction(self, p, v, other_feats, box, box_feats, fluid_mask, box_mask):
         """Precondition: p and v were updated with accerlation"""
-
         fluid_feats = [v.unsqueeze(-2)]
         if not other_feats is None:
             fluid_feats.append(other_feats)
