@@ -139,6 +139,11 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     result['ADE_std'] = np.std(ade)
     result['coverage'] = np.mean(acoverage)
 
+    fdes = []
+    for k, v in de.items():
+        fdes.append(v.numpy()[-1])
+    result['FDE'] = np.mean(fdes)
+    
     if train_window >= 29:
         de1s = []
         de2s = []
