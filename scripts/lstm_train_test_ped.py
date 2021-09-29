@@ -39,11 +39,11 @@ def parse_arguments() -> Any:
                         type=str,
                         help="path to the saved model")
     parser.add_argument("--obs_len",
-                        default=19,
+                        default=7,
                         type=int,
                         help="Observed length of the trajectory")
     parser.add_argument("--pred_len",
-                        default=30,
+                        default=12,
                         type=int,
                         help="Prediction Horizon")
     parser.add_argument("--name",

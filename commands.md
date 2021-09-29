@@ -32,11 +32,17 @@ python scripts/train_dynamics.py --dataset_path /data/argoverse --rho-reg --batc
 
 python scripts/ped_train_dyna.py --dataset_path ../ped_one --rho-reg --batch_size 1 --val_batch_size 1 --model_name ped_dyna_local --batches_per_epoch 1 --val_batches 1 --epochs 100 --val_window 6 --loss nll --train 
 
-python scripts/ped_train_dyna.py --dataset_path ../pedestrian --rho-reg --batch_size 1 --val_batch_size 1 --model_name ped_dyna_local --batches_per_epoch 1200 --val_batches 100 --epochs 100 --loss nll --train 
+python scripts/ped_train_dyna.py --dataset_path ../pedestrian --rho-reg --batch_size 1 --val_batch_size 1 --model_name ped_dyna_local --batches_per_epoch 1200 --val_batches 30 --epochs 100 --loss nll --train 
 
 {3.84 2.09 0.967}
 
 
-python scripts/ped_train.py --dataset_path ../pedestrian --rho-reg --batch_size 1 --val_batch_size 1 --model_name ped_local --batches_per_epoch 1200 --val_batches 100 --epochs 100 --loss nll --train
+
+python scripts/ped_train.py --dataset_path ../pedestrian --rho-reg --batch_size 1 --val_batch_size 1 --model_name ped_local --batches_per_epoch 1200 --val_batches 30 --epochs 100 --loss nll --train
 
 python scripts/ped_train.py --dataset_path ../ped_one --rho-reg --batch_size 1 --val_batch_size 1 --model_name ped_local --batches_per_epoch 1 --val_batches 1 --epochs 100 --loss nll --val_window 6 --train
+
+
+## LSTM
+
+python scripts/lstm_train_test.py --train_features ../pedestrian/train_.pkl  --val_features ../pedestrian/val_.pkl  --obs_len 6 --pred_len 12 --name ped_trans 
