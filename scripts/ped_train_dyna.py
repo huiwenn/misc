@@ -62,11 +62,11 @@ train_path = os.path.join(args.dataset_path, 'train') #, 'lane_data'
 
 def create_model():
     if args.representation:
-        from models.rho_reg_ECCO import ECCONetwork
+        from models.pedestrain_reg_equi_model import ParticlesNetwork
         """Returns an instance of the network for training and evaluation"""
         
-        model = ECCONetwork(radius_scale = 6,
-                            layer_channels = [8, 16, 16, 16, 3],
+        model = ParticlesNetwork(radius_scale = 6,
+                            layer_channels = [4, 8, 16, 16, 3],
                             encoder_hidden_size=10)
     else:
         from models.rho1_ECCO import ECCONetwork
@@ -87,7 +87,6 @@ class MyDataParallel(torch.nn.DataParallel):
             return getattr(self.module, name)
 
 def train():
-    #am = ArgoverseMap()
     log_dir = "runs/" + model_name + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     writer = SummaryWriter(log_dir=log_dir)
 
