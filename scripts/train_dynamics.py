@@ -94,7 +94,7 @@ def train():
     log_dir = "runs/" + model_name + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     writer = SummaryWriter(log_dir=log_dir)
 
-    print('loading tain dataset')
+    print('loading train dataset')
     dataset = read_pkl_data(train_path, batch_size=args.batch_size / args.batch_divide,
                             repeat=True, shuffle=True, max_lane_nodes=900)
 

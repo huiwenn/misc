@@ -4,7 +4,6 @@ from glob import glob
 import pickle
 import os
 
-
 class PedestrainPklLoader(dataflow.RNGDataFlow):
     def __init__(self, data_path: str, shuffle: bool=True, max_num=60):
         super(PedestrainPklLoader, self).__init__()
@@ -31,10 +30,6 @@ class PedestrainPklLoader(dataflow.RNGDataFlow):
                 print('datareading error')
                 continue
 
-            
-    def __len__(self):
-        return len(glob(os.path.join(self.data_path, '*')))
-    
 
 def read_pkl_data(data_path: str, batch_size: int, 
                   shuffle: bool=False, repeat: bool=False, **kwargs):
@@ -44,3 +39,4 @@ def read_pkl_data(data_path: str, batch_size: int,
     df = dataflow.BatchData(df, batch_size=batch_size, use_list=True)
     df.reset_state()
     return df
+
