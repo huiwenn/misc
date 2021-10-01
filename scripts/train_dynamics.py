@@ -43,7 +43,10 @@ parser.add_argument('--train', default=False, action='store_true')
 parser.add_argument('--evaluation', default=False, action='store_true')
 parser.add_argument('--load_model_path', default='', type=str, help='path to model to be loaded')
 parser.add_argument('--loss', default='nll', type=str, help='nll or ecco loss')
-
+feature_parser = parser.add_mutually_exclusive_group(required=False)
+feature_parser.add_argument('--rho1', dest='representation', action='store_false')
+feature_parser.add_argument('--rho-reg', dest='representation', action='store_true')
+parser.set_defaults(representation=True)
 
 def create_model():
     if args.representation:
