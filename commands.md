@@ -33,3 +33,17 @@ python scripts/train_dynamics.py --dataset_path ../argoverse_one --rho-reg --bat
 
 python scripts/train.py --dataset_path /data/argoverse --rho-reg --batch_size 14 --val_batch_size 12 --model_name lane_nll_scaled --batches_per_epoch 600 --val_batches 20 --epochs 100  --loss nll --use_lane --train 
 
+{3.84 2.09 0.967}
+torch=1.8
+
+
+
+python scripts/ped_train.py --dataset_path ../pedestrian --rho-reg --batch_size 1 --val_batch_size 1 --model_name ped_local --batches_per_epoch 1200 --val_batches 30 --epochs 100 --loss nll --train
+
+python scripts/ped_train.py --dataset_path ../ped_one --rho-reg --batch_size 1 --val_batch_size 1 --model_name ped_local --batches_per_epoch 1 --val_batches 1 --epochs 100 --loss nll --val_window 6 --train
+
+
+## LSTM
+
+python scripts/lstm_train_test_ped.py --train_features ../pedestrian/train  --val_features ../pedestrian/val  --name ped_trans
+python scripts/lstm_train_test_ped.py --train_features ../pedestrian/train_.pkl  --val_features ../pedestrian/val_.pkl --name ped_trans 

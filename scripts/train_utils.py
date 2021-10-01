@@ -14,8 +14,8 @@ def get_agent(pr: object, gt: object, pr_id: object, gt_id: object, agent_id: ob
     return torch.cat([pr_agent, pr_m_agent], dim=-1), gt_agent
 
 
-def euclidean_distance(a, b, epsilon=1e-9):
-    return torch.sqrt(torch.sum((a - b)**2, axis=-1) + epsilon)
+def euclidean_distance(a, b, epsilon=1e-9, mask=1):
+    return torch.sqrt(torch.sum((a - b)**2, axis=-1)*mask + epsilon)
 
 
 def loss_fn(pr_pos, gt_pos, num_fluid_neighbors, car_mask):

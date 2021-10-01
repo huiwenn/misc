@@ -2,19 +2,24 @@
 import os
 import shutil
 import tempfile
+from glob import glob
+import pickle
+import os
 import time
 from typing import Any, Dict, List, Tuple, Union
 
 import argparse
 import joblib
+from tensorpack import dataflow
 from joblib import Parallel, delayed
 import tensorflow as tf
 from termcolor import cprint
 import numpy as np
-import pickle as pkl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.data import IterableDataset, DataLoader
+
 
 
 import utils.baseline_utils as baseline_utils
@@ -98,11 +103,11 @@ def parse_arguments() -> Any:
                         help="If true, only run the inference")
     parser.add_argument("--train_batch_size",
                         type=int,
-                        default=512,
+                        default=8,
                         help="Training batch size")
     parser.add_argument("--val_batch_size",
                         type=int,
-                        default=512,
+                        default=8,
                         help="Val batch size")
     parser.add_argument("--end_epoch",
                         type=int,
@@ -130,7 +135,7 @@ global_step = 0
 best_loss = float("inf")
 np.random.seed(100)
 
-ROLLOUT_LENS = [1, 10, 30]
+ROLLOUT_LENS = [1, 12]
 
 class EncoderRNN(nn.Module):
     """Encoder Network."""
@@ -371,12 +376,11 @@ def train(
     """
     args = parse_arguments()
     global global_step
-    mse = nn.MSELoss()
 
-
-    for i, (_input, target, helpers) in enumerate(train_loader):
-        _input = _input.to(device)
-        target = target.to(device)
+    for i, (_input, target, mask) in enumerate(train_loader):
+        _input = torch.tensor(np.concatenate(_input, axis=0), dtype=torch.float32, device=device)
+        target = torch.tensor(np.concatenate(target, axis=0), dtype=torch.float32, device=device)
+        mask = torch.tensor(np.concatenate(mask, axis=0), dtype=torch.float32, device=device)
 
         # Set to train mode
         encoder.train()
@@ -423,8 +427,8 @@ def train(
             decoder_outputs[:, di, :] = output
 
             # Update loss
-            loss += criterion(output[:, :5], target[:, di, :2])
-            msel += mse(output[:, :2], target[:, di, :2])
+            loss += criterion(output[:, :5], target[:, di, :2], mask=mask)
+            msel += euclidean_distance(output[:, :2], target[:, di, :2], mask=mask)
             # Use own predictions as inputs at next step
             decoder_input = output
 
@@ -437,7 +441,7 @@ def train(
         encoder_optimizer.step()
         decoder_optimizer.step()
 
-        if global_step % 1000 == 0:
+        if global_step % 100 == 0:
 
             # Log results
             print(
@@ -447,6 +451,8 @@ def train(
                                   value=loss.item(),
                                   step=epoch)
 
+        if i>100:
+            break
         global_step += 1
 
 
@@ -489,10 +495,10 @@ def validate(
     mis = []
     cov = []
 
-    for i, (_input, target, helpers) in enumerate(val_loader):
-
-        _input = _input.to(device)
-        target = target.to(device)
+    for i, (_input, target, mask) in enumerate(val_loader):
+        _input = torch.tensor(np.concatenate(_input, axis=0), dtype=torch.float32, device=device)
+        target = torch.tensor(np.concatenate(target, axis=0), dtype=torch.float32, device=device)
+        mask =  torch.tensor(np.concatenate(mask, axis=0), dtype=torch.float32, device=device)
 
         # Set to eval mode
         encoder.eval()
@@ -538,12 +544,12 @@ def validate(
             decoder_outputs[:, di, :] = output
 
             # Update loss
-            loss += criterion(output[:, :5], target[:, di, :2])
+            loss += criterion(output[:, :5], target[:, di, :2], mask=mask)
 
             # Use own predictions as inputs at next step
             decoder_input = output
-            de.append(torch.sqrt((decoder_output[:, 0] - target[:, di, 0])**2 +
-                               (decoder_output[:, 1] - target[:, di, 1])**2).detach().cpu().numpy())
+            de.append((torch.sqrt((decoder_output[:, 0] - target[:, di, 0])**2 +
+                               (decoder_output[:, 1] - target[:, di, 1])**2)*mask).detach().cpu().numpy())
 
             miss.append(quantile_loss(output[:, :5], target[:, di, :2]).detach().cpu().numpy())
             covv.append(get_coverage(output[:, :5], target[:, di, :2]).detach().cpu().numpy())
@@ -558,6 +564,8 @@ def validate(
         fdes = np.concatenate([fdes,fde])
         mis.append(np.mean(miss))
         cov.append(np.mean(covv))
+        if i > 30:
+            break
 
 
     # Save
@@ -730,59 +738,59 @@ def infer_helper(
 '''
 
 
-class LSTMDataset(Dataset):
-    """PyTorch Dataset for LSTM Baselines."""
-    def __init__(self, data_path: str, args, shuffle=True):
-        """Initialize the Dataset.
+class PedestrianLstm(dataflow.RNGDataFlow):
+    def __init__(self, data_path: str,  args, shuffle: bool=True, max_num=60):
+        super(PedestrianLstm, self).__init__()
+        self.data_path = data_path
+        self.shuffle = shuffle
+        self.max_num = max_num
+        self.args = args
 
-        Args:
-            data_dict: Dict containing all the data
-            args: Arguments passed to the baseline code
-            mode: train/val/test mode
+    def __iter__(self):
+        pkl_list = glob(os.path.join(self.data_path, '*'))
+        pkl_list.sort()
+        if self.shuffle:
+            self.rng.shuffle(pkl_list)
 
-        """
-        with open(data_path, 'rb') as f:
-            data_dict = pkl.load(f)
+        for pkl_path in pkl_list:
+            try:
+                with open(pkl_path, 'rb') as f:
+                    data = pickle.load(f)
+            except:
+                print('datareading error')
+                continue
+            if sum(data['man_mask']) > self.max_num:
+                continue
+            if 'pos12' not in data.keys():
+                continue
+            #l = int(sum(data['man_mask']))
+            pos = np.array([data['pos'+str(i)] for i in range(12)])
+            outputs = np.stack(pos,axis=1)[:self.max_num,:,:2]
+            inputs = data['pos_enc'][:self.max_num,:,:2]
 
-        # Get input
-        wholetraj = np.concatenate([data_dict["input"],data_dict["output"]],axis=1)
-        print('normalizing')
-        if args.rotation:
-            normalized = baseline_utils.full_norm(wholetraj, args)
-        else:
-            normalized = baseline_utils.translation_norm(wholetraj) #.full_norm(wholetraj, args)#
-        self.input_data = normalized[:, :args.obs_len, :]
-        self.output_data = normalized[:, args.obs_len:, :]
-        self.data_size = self.input_data.shape[0]
-
-    def __len__(self):
-        """Get length of dataset.
-
-        Returns:
-            Length of dataset
-
-        """
-        return self.data_size
-
-    def __getitem__(self, idx: int
-                    ) -> Tuple[torch.FloatTensor, Any, Dict[str, np.ndarray]]:
-        """Get the element at the given index.
-
-        Args:
-            idx: Query index
-
-        Returns:
-            A list containing input Tensor, Output Tensor (Empty if test) and viz helpers.
-
-        """
-        return (
-            torch.FloatTensor(self.input_data[idx]),
-            torch.FloatTensor(
-                self.output_data[idx])
-        )
+            wholetraj = np.concatenate([inputs,outputs],axis=1)
+            #print('normalizing')
+            if self.args.rotation:
+                normalized = baseline_utils.full_norm(wholetraj, self.args)
+            else:
+                normalized = baseline_utils.translation_norm(wholetraj)
+            self.input_data = normalized[:, :self.args.obs_len, :]
+            self.output_data = normalized[:, self.args.obs_len:, :]
+            self.data_size = self.input_data.shape[0]
+            yield self.input_data, self.output_data, data['man_mask'][:self.max_num]
 
 
-def nll_loss_2(pred: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
+def read_pkl_data_lstm(data_path:str, batch_size: int, args,
+                       shuffle: bool=False, repeat: bool=False, **kwargs):
+    df = PedestrianLstm(data_path=data_path, args=args, shuffle=shuffle, **kwargs)
+    if repeat:
+        df = dataflow.RepeatedData(df, -1)
+    df = dataflow.BatchData(df, batch_size=batch_size)#, use_list=True)
+    df.reset_state()
+    return df
+
+
+def nll_loss_2(pred: torch.Tensor, data: torch.Tensor, mask=1) -> torch.Tensor:
     """Negative log loss for single-variate gaussian, can probably be faster"""
     x_mean = pred[:, 0]
     y_mean = pred[:, 1]
@@ -800,6 +808,7 @@ def nll_loss_2(pred: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
               + torch.pow(y_sigma, 2) * torch.pow(x_delta, 2) \
               - 2 * rho * x_sigma * y_sigma * x_delta * y_delta)
 
+    loss = loss*mask
     return torch.mean(loss)
 
 
@@ -813,7 +822,11 @@ def Gaussian2d(x: torch.Tensor) -> torch.Tensor :
     return torch.stack([x_mean, y_mean, sigma_x, sigma_y, rho], dim=1)
 
 
-def quantile_loss(pred: torch.Tensor, data: torch.Tensor, alpha=0.9):
+def euclidean_distance(a, b, epsilon=1e-9, mask=1):
+    return torch.mean(torch.sqrt(torch.sum((a - b)**2, axis=-1)*mask + epsilon)).detach().cpu()
+
+
+def quantile_loss(pred: torch.Tensor, data: torch.Tensor, alpha=0.9, mask=1):
 
     x_mean = pred[:, 0]
     y_mean = pred[:, 1]
@@ -839,7 +852,9 @@ def quantile_loss(pred: torch.Tensor, data: torch.Tensor, alpha=0.9):
     c_delta = torch.where(c_delta > 0, c_delta, torch.zeros_like(c_delta))
 
     mrs = root_det_epsilon * (c_alpha + c_delta/alpha)
+    mrs = mrs*mask
     return torch.mean(mrs)
+
 
 def get_coverage(pred: torch.Tensor, data: torch.Tensor, alpha=0.9):
     x_mean = pred[:, 0]
@@ -909,10 +924,7 @@ def main():
             args.model_path, encoder, decoder, encoder_optimizer,
             decoder_optimizer)
         start_epoch = epoch + 1
-        if rollout_len<30:
-            start_rollout_idx = ROLLOUT_LENS.index(rollout_len) + 1
-        else:
-            start_rollout_idx = ROLLOUT_LENS.index(rollout_len)
+        start_rollout_idx = 1
 
     else:
         start_epoch = 0
@@ -925,26 +937,12 @@ def main():
 
         # Get PyTorch Dataset
         print('loading train dataset')
-        train_dataset = LSTMDataset(args.train_features, args)
+
+        train_loader = read_pkl_data_lstm(args.train_features, batch_size=args.train_batch_size,
+                                          args=args, repeat=True, shuffle=True)
         print('loading val dataset')
-        val_dataset = LSTMDataset(args.val_features, args)
+        val_loader = read_pkl_data_lstm(args.val_features, batch_size=args.val_batch_size, args=args)
 
-        # Setting Dataloaders
-        train_loader = torch.utils.data.DataLoader(
-            train_dataset,
-            batch_size=args.train_batch_size,
-            shuffle=True,
-            drop_last=False,
-            collate_fn=model_utils.my_collate_fn,
-        )
-
-        val_loader = torch.utils.data.DataLoader(
-            val_dataset,
-            batch_size=args.val_batch_size,
-            drop_last=False,
-            shuffle=False,
-            collate_fn=model_utils.my_collate_fn,
-        )
 
         print("Training begins ...")
 
@@ -978,7 +976,7 @@ def main():
                 )
 
                 epoch += 1
-                if epoch % 5 == 0:
+                if epoch % 1 == 0:
                     start = time.time()
                     prev_loss, decrement_counter = validate(
                         val_loader,
@@ -1002,19 +1000,6 @@ def main():
                     # If val loss increased 3 times consecutively, go to next rollout length
                     if decrement_counter > 2:
                         break
-
-            model_utils.save_checkpoint(
-                save_dir,
-                {
-                    "epoch": epoch + 1,
-                    "rollout_len": rollout_len,
-                    "encoder_state_dict": encoder.state_dict(),
-                    "decoder_state_dict": decoder.state_dict(),
-                    "best_loss": 0,
-                    "encoder_optimizer": encoder_optimizer.state_dict(),
-                    "decoder_optimizer": decoder_optimizer.state_dict(),
-                },
-            )
 
         '''
         start_time = time.time()
