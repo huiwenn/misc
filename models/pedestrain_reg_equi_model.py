@@ -59,6 +59,7 @@ class ParticlesNetwork(nn.Module):
         convs = []
         denses = []
         # c_in, c_out, radius, num_radii, num_theta
+        print('in_channel', self.in_channel)
         self.conv_fluid = EquiCtsConv2dRho1ToReg(in_channels = self.in_channel,
                                                     out_channels = self.layer_channels[0],
                                                     num_radii = self.num_radii, 
@@ -92,7 +93,7 @@ class ParticlesNetwork(nn.Module):
             EquiLinearRegToRho1(self.reg_dim), 
         )
         denses.append(dense)
-        conv = EquiCtsConv2dRegToReg(in_channels = in_ch,
+        conv = EquiCtsConv2dRegToRho1(in_channels = in_ch,
                                      out_channels = out_ch,
                                      num_radii = self.num_radii, 
                                      num_theta = self.num_theta,
@@ -126,18 +127,17 @@ class ParticlesNetwork(nn.Module):
         """Precondition: p and v were updated with accerlation"""
 
         fluid_feats = [v.unsqueeze(-2), p.unsqueeze(-2)]
-        if not other_feats is None:
+        if other_feats is not None:
             fluid_feats.append(other_feats)
         fluid_feats = torch.cat(fluid_feats, -2)
 
         # compute the correction by accumulating the output through the network layers
-        output_conv_fluid = self.conv_fluid(p, p, fluid_feats, fluid_mask, fluid_feats)
+        output_conv_fluid = self.conv_fluid(p, p, fluid_feats, fluid_mask)
         output_dense_fluid = self.dense_fluid(fluid_feats)
         
         feats = torch.cat((output_conv_fluid, output_dense_fluid), -2)
         # self.outputs = [feats]
         output = feats
-
         for conv, dense in zip(self.convs, self.denses):
             # pass input features to conv and fully-connected layers
             mags = (torch.sum(output**2,axis=-1) + 1e-6).unsqueeze(-1)
@@ -149,6 +149,7 @@ class ParticlesNetwork(nn.Module):
             
             # if last dim size of output from cur dense layer is same as last dim size of output
             # current output should be based off on previous output
+
             if output_dense.shape[-2] == output.shape[-2]:
                 output = output_conv + output_dense + output
             else:
@@ -180,7 +181,7 @@ class ParticlesNetwork(nn.Module):
                 feats = torch.cat((feats_v, feats_p), -2)
             else:
                 feats_v = torch.cat((other_feats, v0_enc), -2)
-                feats_p = p0_enc
+                feats_p =  torch.cat((other_feats, p0_enc), -2)
                 feats = torch.cat((feats_v, feats_p), -2)
         else:
             if other_feats is None:
@@ -189,10 +190,8 @@ class ParticlesNetwork(nn.Module):
                 feats = torch.cat((feats_v, feats_p), -2)
             else:
                 feats_v = torch.cat((other_feats, states[0][...,1:,:], v0_enc), -2)
-                feats_p = torch.cat((states[1][...,1:,:], p0_enc), -2)
+                feats_p = torch.cat((other_feats, states[1][...,1:,:], p0_enc), -2)
                 feats = torch.cat((feats_v, feats_p), -2)
-        # print(feats.shape)
-
 
         # a = (v0 - v0_enc[...,-1,:]) / self.timestep
         p1, v1 = self.update_pos_vel(p0, v0, a)
@@ -202,7 +201,7 @@ class ParticlesNetwork(nn.Module):
 
         if other_feats is None:
             return p_corrected, v_corrected, m_matrix, (feats_v, feats_p)
-        return p_corrected, v_corrected, m_matrix, (feats_v[..., other_feats.shape[-2]:,:], feats_p)
+        return p_corrected, v_corrected, m_matrix, (feats_v[..., other_feats.shape[-2]:,:], feats_p[..., other_feats.shape[-2]:,:])
 
     
     def recompute_kernel(self):

@@ -49,9 +49,8 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         inputs = ([
             batch['pos_enc'], batch['vel_enc'], 
             batch['pos0'], batch['vel0'], 
-            batch['accel'], sigma0, 
-            box_zeros, boxnorm_zeros,
-            batch['man_mask'], box_mask
+            batch['accel'], sigma0,
+            batch['man_mask']
         ])
 
         pr_pos1, pr_vel1, pr_m1, states = model(inputs)
@@ -80,9 +79,8 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
             # pr_m1 = torch.zeros((batch_size, 60, 2, 2), device=device)
 
             inputs = (pos_enc, vel_enc, pr_pos1, pr_vel1, accel,
-                      sigma0, 
-                      box_zeros, boxnorm_zeros,
-                      batch['man_mask'], box_mask)
+                      sigma0,
+                      batch['man_mask'])
 
             pos0, vel0, m0 = pr_pos1, pr_vel1, pr_m1
 
