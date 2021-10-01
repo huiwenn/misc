@@ -59,7 +59,8 @@ model_name = args.model_name
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("using device", device)
-
+for i in range(torch.cuda.device_count()):
+    print(torch.cuda.get_device_name(i))
 val_path = os.path.join(args.dataset_path, 'val') #, 'lane_data'
 train_path = os.path.join(args.dataset_path, 'train') #, 'lane_data'
     
