@@ -45,25 +45,6 @@ parser.add_argument('--load_model_path', default='', type=str, help='path to mod
 parser.add_argument('--loss', default='nll', type=str, help='nll or ecco loss')
 
 
-
-feature_parser = parser.add_mutually_exclusive_group(required=False)
-feature_parser.add_argument('--rho1', dest='representation', action='store_false')
-feature_parser.add_argument('--rho-reg', dest='representation', action='store_true')
-parser.set_defaults(representation=True)
-
-args = parser.parse_args()
-
-os.environ['CUDA_VISIBLE_DEVICES'] = args.cuda_visible_devices
-
-model_name = args.model_name
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print("using device", device)
-for i in range(torch.cuda.device_count()):
-    print(torch.cuda.get_device_name(i))
-val_path = os.path.join(args.dataset_path, 'val') #, 'lane_data'
-train_path = os.path.join(args.dataset_path, 'train') #, 'lane_data'
-    
 def create_model():
     if args.representation:
         from models.rho_reg_ECCO import ECCONetwork
@@ -315,6 +296,20 @@ def evaluation():
         
         
 if __name__ == '__main__':
+
+    args = parser.parse_args()
+
+    os.environ['CUDA_VISIBLE_DEVICES'] = args.cuda_visible_devices
+
+    model_name = args.model_name
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print("using device", device)
+    for i in range(torch.cuda.device_count()):
+        print(torch.cuda.get_device_name(i))
+    val_path = os.path.join(args.dataset_path, 'val') #, 'lane_data'
+    train_path = os.path.join(args.dataset_path, 'train') #, 'lane_data'
+
     if args.train:
         # debug 大法好
         # with torch.autograd.detect_anomaly():
