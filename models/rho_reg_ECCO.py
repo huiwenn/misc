@@ -125,9 +125,6 @@ class ECCONetwork(nn.Module):
         if not other_feats is None:
             fluid_feats.append(other_feats)
         fluid_feats = torch.cat(fluid_feats, -2)
-        print('p', p.shape)
-        print('feats', fluid_feats.shape)
-        print('mask', fluid_mask.shape)
         # compute the correction by accumulating the output through the network layers
         output_conv_fluid = self.conv_fluid(p, p, fluid_feats, fluid_mask)
         output_dense_fluid = self.dense_fluid(fluid_feats)
@@ -149,10 +146,6 @@ class ECCONetwork(nn.Module):
             
             # if last dim size of output from cur dense layer is same as last dim size of output
             # current output should be based off on previous output
-            print('output_dense', output_dense.shape)
-            print('output', output.shape)
-            print('output_conv',output_conv.shape)
-
             if output_dense.shape[-2] == output.shape[-2]:
                 output = output_conv + output_dense + output
             else:
