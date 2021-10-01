@@ -1,4 +1,3 @@
-pip install torch
 #python scripts/train_dynamics.py --dataset_path /data/argoverse --rho-reg --batch_size 32 --batch_divide 4 --val_batch_size 4 --model_name newdyna --batches_per_epoch 600 --val_batches 50 --epochs 100 --loss nll --use_lane --train
 python scripts/train_dynamics.py --dataset_path ../argoverse_data --rho-reg --batch_size 32 --batch_divide 32 --val_batch_size 1 --model_name newdynatest --batches_per_epoch 200 --val_batches 5 --epochs 100 --loss nll --use_lane --train
 #python scripts/train_dynamics.py --dataset_path /data/argoverse --rho-reg --batch_size 1 --val_batch_size 1 --model_name newdyna --batches_per_epoch 600 --val_batches 20 --epochs 100 --loss nll --use_lane --train
