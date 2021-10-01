@@ -14,8 +14,8 @@ def get_agent(pr: object, gt: object, pr_id: object, gt_id: object, agent_id: ob
     return torch.cat([pr_agent, pr_m_agent], dim=-1), gt_agent
 
 
-def euclidean_distance(a, b, epsilon=1e-9):
-    return torch.sqrt(torch.sum((a - b)**2, axis=-1) + epsilon)
+def euclidean_distance(a, b, epsilon=1e-9, mask=1):
+    return torch.sqrt(torch.sum((a - b)**2, axis=-1)*mask + epsilon)
 
 
 def loss_fn(pr_pos, gt_pos, num_fluid_neighbors, car_mask):
@@ -81,7 +81,7 @@ def nll_dyna(pr_pos, gt_pos, sigma, car_mask):
 def get_coverage(pr_pos, gt_pos, pred_m, rho = 0.9):
     sigma = calc_sigma(pred_m)
     det = torch.det(sigma)
-    dist =  quadratic_func(gt_pos - pr_pos, sigma.inverse()) / det 
+    dist = quadratic_func(gt_pos - pr_pos, sigma.inverse()) / det
     contour = - 2 * torch.log(torch.tensor(1.0, device=dist.device)-rho)
     cover = torch.where(dist < contour, torch.ones(dist.shape, device=dist.device), torch.zeros(dist.shape, device=dist.device))
     return cover    
@@ -233,3 +233,4 @@ def process_batch_ped(batch, device, train_window = 12, train_particle_num=60):
     # accel = torch.zeros(batch_size, 1, 2).to(device)
     batch_tensor['accel'] = accel
     return batch_tensor
+

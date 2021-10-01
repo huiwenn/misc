@@ -2,3 +2,5 @@
 *.ipynb_checkpoints/
 *.pyc
 .idea/*
+*pycache*
+lstm_logs/*

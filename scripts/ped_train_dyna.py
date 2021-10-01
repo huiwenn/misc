@@ -22,7 +22,7 @@ from torch.utils.tensorboard import SummaryWriter
 #os.environ["NCCL_DEBUG"] = "INFO"
 
 parser = argparse.ArgumentParser(description="Training setting and hyperparameters")
-parser.add_argument('--cuda_visible_devices', default='0,1,2,3,4,5,6,7')
+parser.add_argument('--cuda_visible_devices', default='0')#,1,2,3,4,5,6,7')
 parser.add_argument('--dataset_path', default='/path/to/trajnetplusplus_dataset/', 
                     help='path to dataset folder, which contains train and val folders')
 parser.add_argument('--train_window', default=6, type=int, help='how many timestamps to iterate in training')
@@ -66,7 +66,7 @@ def create_model():
         """Returns an instance of the network for training and evaluation"""
         
         model = ECCONetwork(radius_scale = 6,
-                            layer_channels = [8, 16, 16, 8, 3], 
+                            layer_channels = [8, 16, 16, 16, 3],
                             encoder_hidden_size=10)
     else:
         from models.rho1_ECCO import ECCONetwork
@@ -91,7 +91,7 @@ def train():
     log_dir = "runs/" + model_name + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     writer = SummaryWriter(log_dir=log_dir)
 
-    print('loading tain dataset')
+    print('loading train dataset')
     dataset = read_pkl_data(train_path, batch_size=args.batch_size / args.batch_divide,
                             repeat=True, shuffle=True)
 
@@ -176,7 +176,6 @@ def train():
     valid_losses = []
     valid_metrics_list = []
     min_loss = None
-
     '''
     trace = torch.profiler.tensorboard_trace_handler("./profile")
     with torch.profiler.profile(schedule=torch.profiler.schedule(
