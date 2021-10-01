@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+print('importing libraries')
 import os
 import sys
 sys.path.append('..')
