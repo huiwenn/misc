@@ -22,7 +22,7 @@ from torch.utils.tensorboard import SummaryWriter
 #os.environ["NCCL_DEBUG"] = "INFO"
 
 parser = argparse.ArgumentParser(description="Training setting and hyperparameters")
-parser.add_argument('--cuda_visible_devices', default='0,1,2,3,4,5,6,7')
+parser.add_argument('--cuda_visible_devices', default='0,1,2,3')
 parser.add_argument('--dataset_path', default='/path/to/argoverse_forecasting/', 
                     help='path to dataset folder, which contains train and val folders')
 parser.add_argument('--train_window', default=6, type=int, help='how many timestamps to iterate in training')
@@ -192,7 +192,7 @@ def train():
     '''
     #---
     for i in range(epochs):
-        print("training ... epoch " + str(i + 1), end='', flush=True)
+        print("training ... epoch " + str(i + 1))#, end='', flush=True)
         epoch_start_time = time.time()
 
         model.train()
@@ -207,7 +207,7 @@ def train():
             if sub_idx == 0:
                 optimizer.zero_grad()
                 if (batch_itr // args.batch_divide) % 10 == 0:
-                    print("... batch " + str((batch_itr // args.batch_divide) + 1), end='', flush=True)
+                    print("... batch " + str((batch_itr // args.batch_divide) + 1))#, end='', flush=True)
             sub_idx += 1
 
             batch_tensor = process_batch(batch, device, train_window=args.train_window)
@@ -235,7 +235,7 @@ def train():
             clean_cache(device)
 
             if batch_itr == batches_per_epoch - 1:
-                print("... DONE", flush=True)
+                print("... DONE")#, flush=True)
 
         epoch_train_loss = epoch_train_loss/(batches_per_epoch * args.batch_divide)
         train_losses.append(epoch_train_loss)
