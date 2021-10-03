@@ -39,6 +39,9 @@ torch=1.8
 
 
 python scripts/ped_train_dyna.py --dataset_path ../pedestrian --rho-reg --batch_size 1 --val_batch_size 1 --model_name ped_local --batches_per_epoch 1200 --val_batches 30 --epochs 100 --loss nll --train
+python scripts/ped_train.py --dataset_path ../pedestrian --rho-reg --batch_size 1 --val_batch_size 1 --model_name ped_nodyna_local --batches_per_epoch 1400 --val_batches 40 --epochs 100 --loss nll --train
+
+python scripts/ped_train.py --dataset_path ../pedestrian --rho-reg --batch_size 4 --val_batch_size 4 --model_name ped_nodyna --batches_per_epoch 600 --val_batches 100 --epochs 100 --loss nll --train
 
 python scripts/ped_train_dyna.py --dataset_path ../ped_one --rho-reg --batch_size 1 --val_batch_size 1 --model_name ped_local --batches_per_epoch 1 --val_batches 1 --epochs 100 --loss nll --val_window 6 --train
 

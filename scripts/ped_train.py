@@ -61,19 +61,13 @@ val_path = os.path.join(args.dataset_path, 'val') #, 'lane_data'
 train_path = os.path.join(args.dataset_path, 'train') #, 'lane_data'
 
 def create_model():
-    if args.representation:
-        from models.rho_reg_ECCO import ECCONetwork
-        """Returns an instance of the network for training and evaluation"""
-        
-        model = ECCONetwork(radius_scale = 6,
-                            layer_channels = [8, 16, 16, 8, 3], 
-                            encoder_hidden_size=10)
-    else:
-        from models.rho1_ECCO import ECCONetwork
-        """Returns an instance of the network for training and evaluation"""
-        model = ECCONetwork(radius_scale = 6, encoder_hidden_size=18,
-                            layer_channels = [4, 8, 16, 8, 3], 
-                            num_radii = 3)
+    from models.pedestrain_reg_equi_model import ParticlesNetwork
+    """Returns an instance of the network for training and evaluation"""
+
+    model = ParticlesNetwork(radius_scale = 6,
+                             layer_channels = [4, 8, 16, 16, 3],
+                             encoder_hidden_size=9)
+
     return model
 
 class MyDataParallel(torch.nn.DataParallel):
@@ -120,22 +114,14 @@ def train():
 
     def train_one_batch(model, batch, loss_f, train_window=2):
 
-        batch_size = args.batch_size
-        m0 = torch.zeros((batch['pos_enc'].shape[0], 60, 2, 2), device=device)       
-        box_zeros = torch.zeros(batch_size, 1, 2, device=device)
-        boxnorm_zeros = torch.zeros(batch_size, 1, 2, device=device)
-        box_mask = torch.ones(batch_size, 1, 1, device=device)
-
+        m0 = torch.zeros((batch['pos_enc'].shape[0], 60, 2, 2), device=device)
         inputs = ([
-            batch['pos_enc'], batch['vel_enc'], 
-            batch['pos0'], batch['vel0'], 
-            batch['accel'], m0, 
-            box_zeros, boxnorm_zeros,
-            batch['man_mask'], box_mask
+            batch['pos_enc'], batch['vel_enc'],
+            batch['pos0'], batch['vel0'],
+            batch['accel'], m0,
+            batch['man_mask']
         ])
 
-        # print_inputs_shape(inputs)
-        # print(batch['pos0'])
         pr_pos1, pr_vel1, pr_m1, states = model(inputs)
         gt_pos1 = batch['pos1']
 
@@ -149,9 +135,8 @@ def train():
             accel = pr_vel1 - vel_enc[...,-1,:]
             
             inputs = (pos_enc, vel_enc, pr_pos1, pr_vel1, accel,
-                      pr_m1, 
-                      box_zeros, boxnorm_zeros,
-                      batch['man_mask'], box_mask)
+                      pr_m1,
+                      batch['man_mask'])
 
             pos0, vel0 = pr_pos1, pr_vel1
             # del pos_enc, vel_enc

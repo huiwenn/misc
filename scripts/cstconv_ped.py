@@ -64,7 +64,7 @@ train_path = os.path.join(args.dataset_path, 'train') #, 'lane_data'
 def create_model():
     from models.cstcov import ParticlesNetwork
     """Returns an instance of the network for training and evaluation"""
-    model = ParticlesNetwork()
+    model = ParticlesNetwork(encoder_hidden_size=30)
 
     return model
 
@@ -112,54 +112,32 @@ def train():
 
     def train_one_batch(model, batch, loss_f, train_window=2):
 
-        batch_size = args.batch_size
-        if not args.use_lane:
-            batch['lane'] = torch.zeros(batch_size, 1, 3, device=device)
-            batch['lane_norm'] = torch.zeros(batch_size, 1, 3, device=device)
-            batch['lane_mask'] = torch.ones(batch_size, 1, 1, device=device)
-
-        pos_zero = torch.unsqueeze(torch.zeros(batch['pos0'].shape[:-1], device=device),-1)
-        batch['pos0'] = torch.cat([batch['pos0'], pos_zero], dim = -1)
-        batch['vel0'] = torch.cat([batch['vel0'], pos_zero], dim = -1)
-
-        batch['accel'] = torch.cat([batch['accel'], torch.zeros(batch['accel'].shape[:-1],device=device).unsqueeze(-1)], dim = -1)
-        zero_2s = torch.unsqueeze(torch.zeros(batch['vel_2s'].shape[:-1], device=device),-1)
-        batch['vel_2s'] = torch.cat([batch['vel_2s'], zero_2s], dim = -1)
-
+        m0 = torch.zeros((batch['pos_enc'].shape[0], 60, 2, 2), device=device)
         inputs = ([
-            batch['pos_2s'], batch['vel_2s'],
-            batch['pos0'], batch['vel0'], 
-            batch['accel'], batch['sigmas'], #other feats: 4x2 two M matrices
-            batch['lane'], batch['lane_norm'], 
-            batch['car_mask'], batch['lane_mask']
+            batch['pos_enc'], batch['vel_enc'],
+            batch['pos0'], batch['vel0'],
+            batch['accel'], m0,
+            batch['man_mask']
         ])
-    
+
         pr_pos1, pr_vel1, pr_m1, states = model(inputs)
-
-        # test todo
-        # pr_m1 = torch.zeros((batch_size, 60, 2, 2), device=device) 
-
         gt_pos1 = batch['pos1']
 
         losses = loss_f(pr_pos1, gt_pos1, pr_m1, batch['car_mask'].squeeze(-1))
         del gt_pos1
         pos0 = batch['pos0']
         vel0 = batch['vel0']
-        m0 = torch.zeros((batch_size, 60, 2, 2), device=device)
 
         for i in range(train_window-1):
             pos_enc = torch.unsqueeze(pos0, 2)
             vel_enc = torch.unsqueeze(vel0, 2)
-            
-            # test todo 
-            #pr_m1 = torch.zeros((batch_size, 60, 2, 2), device=pos0.device) 
-            
-            inputs = (pos_enc, vel_enc, pr_pos1, pr_vel1, batch['accel'],
-                      torch.cat([m0, pr_m1], dim=-2), 
-                      batch['lane'], batch['lane_norm'], 
-                      batch['car_mask'], batch['lane_mask'])
+            accel = pr_vel1 - vel_enc[...,-1,:]
 
-            pos0, vel0, m0 = pr_pos1, pr_vel1, pr_m1
+            inputs = (pos_enc, vel_enc, pr_pos1, pr_vel1, accel,
+                      pr_m1,
+                      batch['man_mask'])
+
+            pos0, vel0 = pr_pos1, pr_vel1
             # del pos_enc, vel_enc
             
             pr_pos1, pr_vel1, pr_m1, states = model(inputs, states)
@@ -223,10 +201,7 @@ def train():
             del batch_tensor
 
             epoch_train_loss += float(current_loss)
-            
-            # test todo
-            # print('current loss', float(current_loss))
-            
+
             del current_loss
             clean_cache(device)
 

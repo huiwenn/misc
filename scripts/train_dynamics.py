@@ -220,7 +220,7 @@ def train():
             del current_loss
             clean_cache(device)
 
-            if batch_itr == batches_per_epoch - 1:
+            if batch_itr // args.batch_divide == batches_per_epoch - 1:
                 print("... DONE")#, flush=True)
 
         epoch_train_loss = epoch_train_loss/(batches_per_epoch * args.batch_divide)
