@@ -1,4 +1,5 @@
-pip install torch==1.8.0 &&
+pip install torch==1.8.0
+pip install tensorpack
 export PYTHONUNBUFFERED=1
 export PYTHONIOENCODING=UTF-8
 python scripts/ped_train.py --dataset_path /data/pedestrian --rho-reg --batch_size 4 --val_batch_size 4 --model_name ped_nodyna --batches_per_epoch 600 --val_batches 100 --epochs 100 --loss nll --train
