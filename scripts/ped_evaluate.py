@@ -37,20 +37,13 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         count += 1
         
         batch = process_batch_ped(sample, device)
-
-
-        box_zeros = torch.zeros(batch_size, 1, 2, device=device)
-        boxnorm_zeros = torch.zeros(batch_size, 1, 2, device=device)
-        box_mask = torch.ones(batch_size, 1, 1, device=device)
-
         m0 = torch.zeros((batch['pos_enc'].shape[0], 60, 2, 2), device=device)
 
         inputs = ([
-            batch['pos_enc'], batch['vel_enc'], 
-            batch['pos0'], batch['vel0'], 
-            batch['accel'], m0, 
-            box_zeros, boxnorm_zeros,
-            batch['man_mask'], box_mask
+            batch['pos_enc'], batch['vel_enc'],
+            batch['pos0'], batch['vel0'],
+            batch['accel'], m0,
+            batch['man_mask']
         ])
 
         pr_pos1, pr_vel1, pr_m1, states = model(inputs)
@@ -73,13 +66,9 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
             vel_enc = torch.unsqueeze(vel0, 2)
             accel = pr_vel1 - vel_enc[...,-1,:]
 
-            # test todo 
-            # pr_m1 = torch.zeros((batch_size, 60, 2, 2), device=device)
-
             inputs = (pos_enc, vel_enc, pr_pos1, pr_vel1, accel,
-                      pr_m1, 
-                      box_zeros, boxnorm_zeros,
-                      batch['man_mask'], box_mask)
+                      pr_m1,
+                      batch['man_mask'])
 
             pos0, vel0, m0 = pr_pos1, pr_vel1, pr_m1
 
@@ -95,8 +84,6 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
             sigmas.append(sigma_agent.unsqueeze(1).detach().cpu())
             pred.append(pr_agent.unsqueeze(1).detach().cpu())
             gt.append(gt_agent.unsqueeze(1).detach().cpu())
-            
-            #clean_cache(device)
 
         predict_result = (torch.cat(pred, axis=1), torch.cat(gt, axis=1), torch.cat(sigmas,axis=1))
 
@@ -111,6 +98,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     result = {}
     de = {}
     coverage = {}
+    mis = {}
 
     for k, v in prediction_gt.items():
         #print('outputs', v[0], v[1])
@@ -119,7 +107,8 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         #print('sigma',sig)
         de[k] = torch.sqrt((v[0][:,0] - v[1][:,0])**2 + 
                         (v[0][:,1] - v[1][:,1])**2)
-        coverage[k] = get_coverage(v[0][:,:2], v[1], v[2].reshape(train_window,2,2)) 
+        coverage[k] = get_coverage(v[0][:,:2], v[1], v[2])
+        mis[k] = mis_loss(v[0][:,:2], v[1], v[2])
         
     ade = []
     for k, v in de.items():
@@ -129,11 +118,15 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     for k, v in coverage.items():
         acoverage.append(np.mean(v.numpy()))
 
+    amis = []
+    for k, v in mis.items():
+        amis.append(np.mean(v.numpy()))
 
     result['loss'] = total_loss.detach().cpu().numpy()
     result['ADE'] = np.mean(ade)
     result['ADE_std'] = np.std(ade)
     result['coverage'] = np.mean(acoverage)
+    result['mis'] = np.mean(amis)
 
     fdes = []
     for k, v in de.items():
