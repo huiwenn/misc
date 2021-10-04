@@ -45,8 +45,28 @@ python scripts/ped_train.py --dataset_path ../pedestrian --rho-reg --batch_size 
 
 python scripts/ped_train_dyna.py --dataset_path ../ped_one --rho-reg --batch_size 1 --val_batch_size 1 --model_name ped_local --batches_per_epoch 1 --val_batches 1 --epochs 100 --loss nll --val_window 6 --train
 
+python scripts/cstconv_ped.py --dataset_path ../pedestrian --rho-reg --batch_size 4 read_pkl_data
+
 
 ## LSTM
+python scripts/lstm_train_test.py --train_features ../argoverse_data/train_rose.pkl  --val_features ../argoverse_data/val_rose.pkl --model_path ./checkpoints/lstm/LSTM_rollout30.pth.tar --test
 
 python scripts/lstm_train_test_ped.py --train_features ../pedestrian/train  --val_features ../pedestrian/val  --name ped_trans
 python scripts/lstm_train_test_ped.py --train_features ../pedestrian/train_.pkl  --val_features ../pedestrian/val_.pkl --name ped_trans 
+
+
+models:
+
+## argoverse
+
+lstm: ./checkpoints/lstmfixed/LSTM_rollout30.pth.tar
+lstmmis:  ./checkpoints/mis_no_rot/LSTM_rollout30.pth.tar 
+cstconv: ablation
+nll: lane_nll_naut
+dyna: nll_dyna_local
+
+## pedestrian
+
+scttcov: ped_cstconv
+nll: ped_nodyna
+dyna: ped_local

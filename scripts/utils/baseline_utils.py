@@ -563,7 +563,6 @@ def translation_norm(df: np.array) -> np.ndarray:
         xy_seq = np.stack((x_coord_seq[i], y_coord_seq[i]), axis=-1)
 
         start = xy_seq[0]
-
         # First apply translation
         m = [1, 0, 0, 1, -start[0], -start[1]]
         ls = LineString(xy_seq)

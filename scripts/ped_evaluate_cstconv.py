@@ -39,8 +39,16 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         
         count += 1
 
-
         batch = process_batch_ped(sample, device)
+        pos_zero = torch.unsqueeze(torch.zeros(batch['pos0'].shape[:-1], device=device),-1)
+        batch['pos0'] = torch.cat([batch['pos0'], pos_zero], dim = -1)
+        batch['vel0'] = torch.cat([batch['vel0'], pos_zero], dim = -1)
+
+        batch['accel'] = torch.cat([batch['accel'], torch.zeros(batch['accel'].shape[:-1],device=device).unsqueeze(-1)], dim = -1)
+        zero_2s = torch.unsqueeze(torch.zeros(batch['vel_enc'].shape[:-1], device=device),-1)
+        batch['vel_enc'] = torch.cat([batch['vel_enc'], zero_2s], dim = -1)
+        batch['pos_enc'] = torch.cat([batch['pos_enc'], zero_2s], dim = -1)
+
         m0 = torch.zeros((batch['pos_enc'].shape[0], 60, 2, 2), device=device)
 
         inputs = ([
@@ -65,7 +73,6 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
 
         pos0 = batch['pos0']
         vel0 = batch['vel0']
-        m0 = torch.zeros((batch_size, 60, 2, 2), device=device)
         for j in range(train_window-1):
             pos_enc = torch.unsqueeze(pos0, 2)
             vel_enc = torch.unsqueeze(vel0, 2)
@@ -92,7 +99,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
 
         clean_cache(device)
 
-        predict_result = (torch.cat(pred, axis=1), torch.cat(gt, axis=1))
+        predict_result = (torch.cat(pred, axis=1), torch.cat(gt, axis=1), torch.cat(sigmas,axis=1))
 
         scenes = batch['scene_idx'].tolist()
 
@@ -108,10 +115,6 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     mis = {}
 
     for k, v in prediction_gt.items():
-        #print('outputs', v[0], v[1])
-        #M = v[0][:,2:].reshape(v[0].shape[0],2,2)
-        #sig = calc_sigma(M)
-        #print('sigma',sig)
         de[k] = torch.sqrt((v[0][:,0] - v[1][:,0])**2 +
                            (v[0][:,1] - v[1][:,1])**2)
         coverage[k] = get_coverage(v[0][:,:2], v[1], v[2])

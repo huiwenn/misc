@@ -59,7 +59,7 @@ class ParticlesNetwork(nn.Module):
         self.dense_fluid = nn.Linear(self.in_channel, self.layer_channels[0])
         
         # concat conv_obstacle, conv_fluid, dense_fluid
-        in_ch = 3 * self.layer_channels[0] 
+        in_ch = 2 * self.layer_channels[0]
         for i in range(1, len(self.layer_channels)):
             out_ch = self.layer_channels[i]
             dense = nn.Linear(in_ch, out_ch)
@@ -99,7 +99,7 @@ class ParticlesNetwork(nn.Module):
         flatten_output = dense_layer(flatten_in_feats)
         return flatten_output.reshape(in_feats.shape[0], in_feats.shape[1], -1)
 
-    def compute_correction(self, p, v, other_feats, box, box_feats, fluid_mask, box_mask):
+    def compute_correction(self, p, v, other_feats, fluid_mask):
         """Precondition: p and v were updated with accerlation"""
 
         # compute the extent of the filters (the diameter) and the fluid features
@@ -112,9 +112,8 @@ class ParticlesNetwork(nn.Module):
         # compute the correction by accumulating the output through the network layers
         output_conv_fluid = self.conv_fluid(p, p, fluid_feats, fluid_mask)
         output_dense_fluid = self.dense_forward(fluid_feats, self.dense_fluid)
-        output_conv_obstacle = self.conv_obstacle(box, p, box_feats, box_mask)
-        
-        feats = torch.cat((output_conv_obstacle, output_conv_fluid, output_dense_fluid), -1)
+
+        feats = torch.cat((output_conv_fluid, output_dense_fluid), -1)
         # self.outputs = [feats]
         output = feats
         
@@ -147,7 +146,8 @@ class ParticlesNetwork(nn.Module):
         """ inputs: 8 elems tuple
         p0_enc, v0_enc, p0, v0, a, feats, box, box_feats
         Computes 1 simulation timestep"""
-        p0_enc, v0_enc, p0, v0, a, other_feats, box, box_feats, fluid_mask, box_mask = inputs
+
+        p0_enc, v0_enc, p0, v0, a, other_feats, fluid_mask = inputs
         other_feats = torch.flatten(other_feats, -2, -1)
 
         if states is None:
@@ -161,15 +161,13 @@ class ParticlesNetwork(nn.Module):
                 feats = v0_enc.reshape(*v0_enc.shape[:2], -1)
                 feats = torch.cat((states[0][...,3:], feats), -1)
             else:
-                #print('other_feats', other_feats.shape)
-                #print('v0enc', v0_enc.reshape(*v0_enc.shape[:2], -1).shape)
                 feats = torch.cat((other_feats, states[0][...,3:], v0_enc.reshape(*v0_enc.shape[:2], -1)), -1)
                 #print('feats',feats.shape)
 
         # print(feats.shape)
 
         p1, v1 = self.update_pos_vel(p0, v0, a)
-        pos_correction = self.compute_correction(p1, v1, feats, box, box_feats, fluid_mask, box_mask)
+        pos_correction = self.compute_correction(p1, v1, feats, fluid_mask)
         pc = torch.cat([pos_correction[...,:2], torch.zeros(*pos_correction.shape[:-1], 1, device=p1.device)], -1)
         p_corrected, v_corrected = self.apply_correction(p0, p1, pc)
         m_matrix = pos_correction[..., 2:].reshape(*pos_correction.shape[:-1], 2,2)

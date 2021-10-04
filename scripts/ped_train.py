@@ -133,7 +133,7 @@ def train():
             pos_enc = torch.unsqueeze(pos0, 2)
             vel_enc = torch.unsqueeze(vel0, 2)
             accel = pr_vel1 - vel_enc[...,-1,:]
-            
+
             inputs = (pos_enc, vel_enc, pr_pos1, pr_vel1, accel,
                       pr_m1,
                       batch['man_mask'])
@@ -170,7 +170,7 @@ def train():
     '''
     #---
     for i in range(epochs):
-        print("training ... epoch " + str(i + 1), end='', flush=True)
+        print("training ... epoch " + str(i + 1)) #, end='', flush=True)
         epoch_start_time = time.time()
 
         model.train()
@@ -185,7 +185,7 @@ def train():
             if sub_idx == 0:
                 optimizer.zero_grad()
                 if (batch_itr // args.batch_divide) % 10 == 0:
-                    print("... batch " + str((batch_itr // args.batch_divide) + 1), end='', flush=True)
+                    print("... batch " + str((batch_itr // args.batch_divide) + 1))#, end='', flush=True)
             sub_idx += 1
 
             batch_tensor = process_batch_ped(batch, device, train_window=args.train_window)
@@ -213,7 +213,7 @@ def train():
             clean_cache(device)
 
             if batch_itr == batches_per_epoch - 1:
-                print("... DONE", flush=True)
+                print("... DONE")#, flush=True)
 
         epoch_train_loss = epoch_train_loss/(batches_per_epoch * args.batch_divide)
         train_losses.append(epoch_train_loss)

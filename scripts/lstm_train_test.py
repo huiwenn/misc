@@ -15,8 +15,6 @@ import pickle as pkl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-
 import utils.baseline_utils as baseline_utils
 from torch.utils.data import IterableDataset, Dataset
 
@@ -486,9 +484,12 @@ def validate(
     total_loss = []
     ades = []
     fdes = np.array([])
+    nll = []
     mis = []
     cov = []
-
+    cov_1s = []
+    cov_2s = []
+    cov_3s = []
     for i, (_input, target, helpers) in enumerate(val_loader):
 
         _input = _input.to(device)
@@ -529,6 +530,7 @@ def validate(
         de = []
         miss = []
         covv = []
+        nlls = []
         for di in range(output_length):
             decoder_output, decoder_hidden = decoder(decoder_input,
                                                      decoder_hidden)
@@ -544,7 +546,7 @@ def validate(
             decoder_input = output
             de.append(torch.sqrt((decoder_output[:, 0] - target[:, di, 0])**2 +
                                (decoder_output[:, 1] - target[:, di, 1])**2).detach().cpu().numpy())
-
+            nlls.append(nll_loss_2(output[:, :5], target[:, di, :2]).detach().cpu().numpy())
             miss.append(quantile_loss(output[:, :5], target[:, di, :2]).detach().cpu().numpy())
             covv.append(get_coverage(output[:, :5], target[:, di, :2]).detach().cpu().numpy())
             # Use own predictions as inputs at next step
@@ -556,6 +558,10 @@ def validate(
         ades.append(ade)
         fde = de[-1]
         fdes = np.concatenate([fdes,fde])
+        cov_1s = np.concatenate([cov_1s,covv[9]])
+        cov_2s = np.concatenate([cov_2s,covv[19]])
+        cov_3s = np.concatenate([cov_3s,covv[29]])
+        nll.append(np.mean(nlls))
         mis.append(np.mean(miss))
         cov.append(np.mean(covv))
 
@@ -566,8 +572,12 @@ def validate(
     fde = np.mean(fdes)
     mrs = np.mean(mis)
     cov = np.mean(cov)
+    cov1s = np.mean(cov_1s)
+    cov2s = np.mean(cov_2s)
+    cov3s = np.mean(cov_3s)
     cprint(
-        f"Val -- Epoch:{epoch}, loss:{val_loss}, ade:{ade}, fde:{fde}, mis:{mrs}, cov:{cov}, Rollout: {rollout_len}",
+        f"Val -- Epoch:{epoch}, loss:{val_loss}, ade:{ade}, fde:{fde}, mis:{mrs}, \
+        cov:{cov}, 1s:{cov1s}, 2s:{cov2s}, 3s:{cov3s}, nll:{nll}, Rollout: {rollout_len}",
         color="green",
     )
 
@@ -913,50 +923,50 @@ def main():
             start_rollout_idx = ROLLOUT_LENS.index(rollout_len) + 1
         else:
             start_rollout_idx = ROLLOUT_LENS.index(rollout_len)
+            print("start rollout index", start_rollout_idx)
 
     else:
         start_epoch = 0
         start_rollout_idx = 0
 
-    if not args.test:
+    # Tensorboard logger
+    log_dir = os.path.join(os.getcwd(), "lstm_logs", baseline_key)
 
-        # Tensorboard logger
-        log_dir = os.path.join(os.getcwd(), "lstm_logs", baseline_key)
+    # Get PyTorch Dataset
+    print('loading train dataset')
+    train_dataset = LSTMDataset(args.train_features, args)
+    print('loading val dataset')
+    val_dataset = LSTMDataset(args.val_features, args)
 
-        # Get PyTorch Dataset
-        print('loading train dataset')
-        train_dataset = LSTMDataset(args.train_features, args)
-        print('loading val dataset')
-        val_dataset = LSTMDataset(args.val_features, args)
+    # Setting Dataloaders
+    train_loader = torch.utils.data.DataLoader(
+        train_dataset,
+        batch_size=args.train_batch_size,
+        shuffle=True,
+        drop_last=False,
+        collate_fn=model_utils.my_collate_fn,
+    )
 
-        # Setting Dataloaders
-        train_loader = torch.utils.data.DataLoader(
-            train_dataset,
-            batch_size=args.train_batch_size,
-            shuffle=True,
-            drop_last=False,
-            collate_fn=model_utils.my_collate_fn,
-        )
+    val_loader = torch.utils.data.DataLoader(
+        val_dataset,
+        batch_size=args.val_batch_size,
+        drop_last=False,
+        shuffle=False,
+        collate_fn=model_utils.my_collate_fn,
+    )
 
-        val_loader = torch.utils.data.DataLoader(
-            val_dataset,
-            batch_size=args.val_batch_size,
-            drop_last=False,
-            shuffle=False,
-            collate_fn=model_utils.my_collate_fn,
-        )
+    print("Training begins ...")
 
-        print("Training begins ...")
+    decrement_counter = 0
 
-        decrement_counter = 0
-
-        epoch = start_epoch
-        global_start_time = time.time()
-        for i in range(start_rollout_idx, len(ROLLOUT_LENS)):
-            rollout_len = ROLLOUT_LENS[i]
-            logger = Logger(log_dir, name="{}".format(rollout_len))
-            best_loss = float("inf")
-            prev_loss = best_loss
+    epoch = start_epoch
+    global_start_time = time.time()
+    for i in range(start_rollout_idx, len(ROLLOUT_LENS)):
+        rollout_len = ROLLOUT_LENS[i]
+        logger = Logger(log_dir, name="{}".format(rollout_len))
+        best_loss = float("inf")
+        prev_loss = best_loss
+        if not args.test:
             while epoch < args.end_epoch:
                 start = time.time()
                 train(
@@ -978,7 +988,9 @@ def main():
                 )
 
                 epoch += 1
-                if epoch % 5 == 0:
+
+                #indent this out if test
+                if epoch % 5 == 0 or args.test:
                     start = time.time()
                     prev_loss, decrement_counter = validate(
                         val_loader,
@@ -1000,21 +1012,8 @@ def main():
                     )
 
                     # If val loss increased 3 times consecutively, go to next rollout length
-                    if decrement_counter > 2:
+                    if decrement_counter > 2 or args.test:
                         break
-
-            model_utils.save_checkpoint(
-                save_dir,
-                {
-                    "epoch": epoch + 1,
-                    "rollout_len": rollout_len,
-                    "encoder_state_dict": encoder.state_dict(),
-                    "decoder_state_dict": decoder.state_dict(),
-                    "best_loss": 0,
-                    "encoder_optimizer": encoder_optimizer.state_dict(),
-                    "decoder_optimizer": decoder_optimizer.state_dict(),
-                },
-            )
 
         '''
         start_time = time.time()
@@ -1038,7 +1037,6 @@ def main():
         print(f"Test completed in {(end - start_time) / 60.0} mins")
         print(f"Forecasted Trajectories saved at {args.traj_save_path}")
         '''
-
 
 if __name__ == "__main__":
     main()

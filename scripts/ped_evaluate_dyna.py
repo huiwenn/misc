@@ -14,7 +14,7 @@ from train_utils import *
 def evaluate(model, val_dataset, loss_f, use_lane=False,
              train_window=3, max_iter=2500, device='cpu', start_iter=0, 
              batch_size=32):
-    
+
     print('evaluating.. ', end='', flush=True)
         
     count = 0
@@ -105,12 +105,14 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     result = {}
     de = {}
     coverage = {}
+    mis = {}
 
     for k, v in prediction_gt.items():
-        de[k] = torch.sqrt((v[0][:,0] - v[1][:,0])**2 + 
-                        (v[0][:,1] - v[1][:,1])**2)
-        coverage[k] = get_coverage_dyna(v[0][:,:2], v[1], v[2].reshape(train_window,2,2)) 
-        
+        de[k] = torch.sqrt((v[0][:,0] - v[1][:,0])**2 +
+                           (v[0][:,1] - v[1][:,1])**2)
+        coverage[k] = get_coverage(v[0][:,:2], v[1], v[2], sigma_ready=True)
+        mis[k] = mis_loss(v[0][:,:2], v[1], v[2], sigma_ready=True)
+
     ade = []
     for k, v in de.items():
         ade.append(np.mean(v.numpy()))
@@ -119,11 +121,17 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     for k, v in coverage.items():
         acoverage.append(np.mean(v.numpy()))
 
+    amis = []
+    for k, v in mis.items():
+        amis.append(np.mean(v.numpy()))
+
 
     result['loss'] = total_loss.detach().cpu().numpy()
     result['ADE'] = np.mean(ade)
     result['ADE_std'] = np.std(ade)
     result['coverage'] = np.mean(acoverage)
+    result['mis'] = np.mean(amis)
+
 
     fdes = []
     for k, v in de.items():

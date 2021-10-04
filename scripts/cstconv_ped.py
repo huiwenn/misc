@@ -7,7 +7,7 @@ import time
 import pickle
 import argparse
 import datetime
-from evaluate_cstconv_ped import evaluate
+from ped_evaluate_cstconv import evaluate
 from datasets.pedestrian_pkl_loader import read_pkl_data
 from train_utils import *
 
@@ -62,9 +62,9 @@ val_path = os.path.join(args.dataset_path, 'val') #, 'lane_data'
 train_path = os.path.join(args.dataset_path, 'train') #, 'lane_data'
     
 def create_model():
-    from models.cstcov import ParticlesNetwork
+    from models.cstcov_ped import ParticlesNetwork
     """Returns an instance of the network for training and evaluation"""
-    model = ParticlesNetwork(encoder_hidden_size=30)
+    model = ParticlesNetwork(encoder_hidden_size=29)
 
     return model
 
@@ -86,7 +86,7 @@ def train():
 
     print('loading tain dataset')
     dataset = read_pkl_data(train_path, batch_size=args.batch_size / args.batch_divide,
-                            repeat=True, shuffle=True, max_lane_nodes=900)
+                            repeat=True, shuffle=True,)
 
     data_iter = iter(dataset)
 
@@ -112,6 +112,15 @@ def train():
 
     def train_one_batch(model, batch, loss_f, train_window=2):
 
+        pos_zero = torch.unsqueeze(torch.zeros(batch['pos0'].shape[:-1], device=device),-1)
+        batch['pos0'] = torch.cat([batch['pos0'], pos_zero], dim = -1)
+        batch['vel0'] = torch.cat([batch['vel0'], pos_zero], dim = -1)
+
+        batch['accel'] = torch.cat([batch['accel'], torch.zeros(batch['accel'].shape[:-1],device=device).unsqueeze(-1)], dim = -1)
+        zero_2s = torch.unsqueeze(torch.zeros(batch['vel_enc'].shape[:-1], device=device),-1)
+        batch['vel_enc'] = torch.cat([batch['vel_enc'], zero_2s], dim = -1)
+        batch['pos_enc'] = torch.cat([batch['pos_enc'], zero_2s], dim = -1)
+
         m0 = torch.zeros((batch['pos_enc'].shape[0], 60, 2, 2), device=device)
         inputs = ([
             batch['pos_enc'], batch['vel_enc'],
@@ -123,7 +132,7 @@ def train():
         pr_pos1, pr_vel1, pr_m1, states = model(inputs)
         gt_pos1 = batch['pos1']
 
-        losses = loss_f(pr_pos1, gt_pos1, pr_m1, batch['car_mask'].squeeze(-1))
+        losses = loss_f(pr_pos1, gt_pos1, pr_m1, batch['man_mask'].squeeze(-1))
         del gt_pos1
         pos0 = batch['pos0']
         vel0 = batch['vel0']
@@ -143,7 +152,7 @@ def train():
             pr_pos1, pr_vel1, pr_m1, states = model(inputs, states)
             gt_pos1 = batch['pos'+str(i+2)]
             
-            losses += loss_f(pr_pos1, gt_pos1, pr_m1, batch['car_mask'].squeeze(-1))
+            losses += loss_f(pr_pos1, gt_pos1, pr_m1, batch['man_mask'].squeeze(-1))
 
         total_loss = torch.sum(losses,axis=0) / (train_window)
         return total_loss
@@ -184,7 +193,7 @@ def train():
                     print("... batch " + str((batch_itr // args.batch_divide) + 1), end='', flush=True)
             sub_idx += 1
             
-            batch_tensor = process_batch(batch, device, train_window=args.train_window)
+            batch_tensor = process_batch_ped(batch, device, train_window=args.train_window)
             del batch
 
             data_fetch_latency = time.time() - data_fetch_start
