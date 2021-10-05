@@ -86,7 +86,6 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
 
         pos0 = data['pos0']
         vel0 = data['vel0']
-        m0 = torch.zeros((batch_size, 60, 2, 2), device=device)
         for j in range(train_window-1):
             pos_enc = torch.unsqueeze(pos0, 2)
             vel_enc = torch.unsqueeze(vel0, 2)
@@ -115,9 +114,10 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
                                            data['track_id'+str(j+1)].squeeze(-1),
                                            agent_id, device, pr_m1=sigma0)
 
+            sigmas.append(sigma0.unsqueeze(1).detach().cpu())
             pred.append(pr_agent.unsqueeze(1).detach().cpu())
             gt.append(gt_agent.unsqueeze(1).detach().cpu())
-            
+
             #clean_cache(device)
 
         predict_result = (torch.cat(pred, axis=1), torch.cat(gt, axis=1), torch.cat(sigmas,axis=1))
@@ -129,16 +129,18 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     result = {}
     de = {}
     coverage = {}
+    mis = {}
 
     for k, v in prediction_gt.items():
         #print('outputs', v[0], v[1])
         #M = v[0][:,2:].reshape(v[0].shape[0],2,2)
         #sig = calc_sigma(M)
         #print('sigma',sig)
-        de[k] = torch.sqrt((v[0][:,0] - v[1][:,0])**2 + 
+        de[k] = torch.sqrt((v[0][:,0] - v[1][:,0])**2 +
                         (v[0][:,1] - v[1][:,1])**2)
-        coverage[k] = get_coverage_dyna(v[0][:,:2], v[1], v[0][:,2:].reshape(train_window,2,2)) #pr_pos, gt_pos, pred_m, car_mask)  
-        
+        coverage[k] = get_coverage(v[0][:,:2], v[1], v[0][:,2:].reshape(train_window,2,2),sigma_ready=True) #pr_pos, gt_pos, pred_m, car_mask)
+        mis[k] = mis_loss(v[0][:,:2], v[1],v[0][:,2:].reshape(train_window,2,2),sigma_ready=True)
+
     ade = []
     for k, v in de.items():
         ade.append(np.mean(v.numpy()))
@@ -147,11 +149,15 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     for k, v in coverage.items():
         acoverage.append(np.mean(v.numpy()))
 
+    amis = []
+    for k, v in mis.items():
+        amis.append(np.mean(v.numpy()))
 
     result['loss'] = total_loss.detach().cpu().numpy()
     result['ADE'] = np.mean(ade)
     result['ADE_std'] = np.std(ade)
     result['coverage'] = np.mean(acoverage)
+    result['mis'] = np.mean(amis)
 
     if train_window >= 29:
         de1s = []
