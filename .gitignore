@@ -1,4 +1,5 @@
 *.DS_Store
+scripts/vis.ipynb 
 *.ipynb_checkpoints/
 *.pyc
 .idea/*
