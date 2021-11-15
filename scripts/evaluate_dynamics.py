@@ -52,7 +52,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         city = data['city']
         scenes = data['scene_idx'].tolist()
 
-        m0 = torch.zeros((data['pos_2s'].shape[0], 60, 2, 2), device=device)
+        m0 = -10*torch.eye(2, device=device).reshape((1,2,2)).repeat((batch_size, 60, 1, 1))
         sigma0 = calc_sigma(m0)
 
         inputs = ([

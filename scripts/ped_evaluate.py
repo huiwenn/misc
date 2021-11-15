@@ -52,10 +52,14 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         losses = loss_f(pr_pos1, gt_pos1, pr_m1, batch['man_mask'].squeeze(-1))
         
         pr_agent, gt_agent, sigma_agent = pr_pos1[:,0], gt_pos1[:,0], pr_m1[:,0]
-        
+        '''
         sigmas.append(sigma_agent.unsqueeze(1).detach().cpu())
         pred.append(pr_agent.unsqueeze(1).detach().cpu())
         gt.append(gt_agent.unsqueeze(1).detach().cpu())
+        '''
+        sigmas.append(pr_m1.detach().cpu()) #sigma_agent.unsqueeze(1).detach().cpu())
+        pred.append(pr_pos1.detach().cpu()) #pr_agent.unsqueeze(1).detach().cpu())
+        gt.append(gt_pos1.detach().cpu())#gt_agent.unsqueeze(1).detach().cpu())
         del pr_agent, gt_agent
         clean_cache(device)
 
@@ -80,17 +84,25 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
             losses += loss_f(pr_pos1, gt_pos1, pr_m1, batch['man_mask'].squeeze(-1))
 
             pr_agent, gt_agent, sigma_agent = pr_pos1[:,0], gt_pos1[:,0], pr_m1[:,0]
-            
+            '''
             sigmas.append(sigma_agent.unsqueeze(1).detach().cpu())
             pred.append(pr_agent.unsqueeze(1).detach().cpu())
             gt.append(gt_agent.unsqueeze(1).detach().cpu())
+            '''
+            sigmas.append(pr_m1.detach().cpu()) #sigma_agent.unsqueeze(1).detach().cpu())
+            pred.append(pr_pos1.detach().cpu()) #pr_agent.unsqueeze(1).detach().cpu())
+            gt.append(gt_pos1.detach().cpu())#gt_agent.unsqueeze(1).detach().cpu())
+            #'''
 
-        predict_result = (torch.cat(pred, axis=1), torch.cat(gt, axis=1), torch.cat(sigmas,axis=1))
+        predict_result = (torch.cat(pred, axis=0), torch.cat(gt, axis=0), torch.cat(sigmas, axis=0))
 
+        #predict_result = (torch.cat(pred, axis=1), torch.cat(gt, axis=1), torch.cat(sigmas, axis=1))
         scenes = batch['scene_idx'].tolist()
 
         for idx, scene_id in enumerate(scenes):
-            prediction_gt[scene_id] = (predict_result[0][idx], predict_result[1][idx], predict_result[2][idx])
+            al = int(torch.sum(batch['man_mask']).detach().cpu().numpy())
+            for i in range(al):
+                prediction_gt[scene_id + str(i)] = (predict_result[0][:,i,:], predict_result[1][:,i,:], predict_result[2][:,i,:])
     
     #print('predgt', prediction_gt)
     total_loss = torch.sum(losses,axis=0) / (train_window) 

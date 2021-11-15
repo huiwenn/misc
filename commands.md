@@ -18,25 +18,15 @@ python scripts/train.py --dataset_path /data/argoverse --rho-reg --batch_size 16
 python scripts/train.py --dataset_path ../argoverse_one --rho-reg --model_name nll_nautilus --batch_size 1  --batches_per_epoch 1 --val_batches 1 --epochs 50 --val_batches 10  --loss nll --evaluation --use_lane
 
 
-python scripts/train_mod.py --dataset_path ../argoverse_data --rho-reg --batch_size 1 --val_batch_size 1 --model_name mod --batches_per_epoch 1200 --val_batches 45 --epoch 200 --train
-
-
- python scripts/train_mod.py --dataset_path /data/argoverse --rho-reg --batch_size 14 --val_batch_size 12 --train --model_name ecco_naut --batches_per_epoch 600 --val_batches 30 --epochs 100 --loss ecco --use_lane --load_model_path lane_nll
-
- python scripts/train_dyna.py --dataset_path /data/argoverse --rho-reg --batch_size 12 --val_batch_size 12 --model_name nll_dyna_local --batches_per_epoch 600 --val_batches 20 --epochs 100 --loss nll --use_lane --train 
-
-
-python scripts/train_dynamics.py --dataset_path ../argoverse_data --rho-reg --batch_size 1 --val_batch_size 1 --batches_per_epoch 1200 --val_batches 45 --epoch 200 --model_name newdyna_local --loss nll --use_lane --train 
-
-python scripts/train_dynamics.py --dataset_path ../argoverse_one --rho-reg --batch_size 1 --val_batch_size 1 --batches_per_epoch 1 --val_batches 1 --epoch 200 --model_name nll_dyna_local2 --loss nll --use_lane --train --val_window 6
-
+ python scripts/train_dyna.py --dataset_path /data/argoverse --rho-reg --batch_size 12 --val_batch_size 12 --model_name nll_dyna_local --batches_per_epoch 600 --val_batches 20 --epochs 100 --loss nll --use_lane --train
 
 python scripts/train.py --dataset_path /data/argoverse --rho-reg --batch_size 14 --val_batch_size 12 --model_name lane_nll_scaled --batches_per_epoch 600 --val_batches 20 --epochs 100  --loss nll --use_lane --train 
 
 {3.84 2.09 0.967}
-torch=1.8
 
-
+#reproduction scripts
+python scripts/train.py --dataset_path ../argoverse_data --rho-reg --batch_size 1 --val_batch_size 1 --use_lane --train --model_name pecco_run1 --batches_per_epoch 1200 --val_batches 50 --epochs 100 --loss nll
+python scripts/train_dynamics.py --dataset_path ../argoverse_data --rho-reg --batch_size 1 --val_batch_size 1 --use_lane --train --model_name peccodyna_scaled --batches_per_epoch 1200 --val_batches 50 --epochs 100 --loss nll
 
 python scripts/ped_train_dyna.py --dataset_path ../pedestrian --rho-reg --batch_size 1 --val_batch_size 1 --model_name ped_local --batches_per_epoch 1200 --val_batches 30 --epochs 100 --loss nll --train
 python scripts/ped_train.py --dataset_path ../pedestrian --rho-reg --batch_size 1 --val_batch_size 1 --model_name ped_nodyna_local --batches_per_epoch 1400 --val_batches 40 --epochs 100 --loss nll --train
@@ -47,12 +37,20 @@ python scripts/ped_train_dyna.py --dataset_path ../ped_one --rho-reg --batch_siz
 
 python scripts/cstconv_ped.py --dataset_path ../pedestrian --rho-reg --batch_size 4 read_pkl_data
 
+# nri
+python scripts/train_nri.py --dataset_path ../nridata/one --rho-reg --batch_size 1 --val_batch_size 1  --train --model_name nri_one --batches_per_epoch 1 --val_batches 1 --epochs 100 --loss nll
 
 ## LSTM
 python scripts/lstm_train_test.py --train_features ../argoverse_data/train_rose.pkl  --val_features ../argoverse_data/val_rose.pkl --model_path ./checkpoints/lstm/LSTM_rollout30.pth.tar --test
 
-python scripts/lstm_train_test_ped.py --train_features ../pedestrian/train  --val_features ../pedestrian/val  --name ped_trans
-python scripts/lstm_train_test_ped.py --train_features ../pedestrian/train_.pkl  --val_features ../pedestrian/val_.pkl --name ped_trans 
+python scripts/lstm_train_test_ped.py --train_features ../pedestrian/train  --val_features ../pedestrian/val  --name ped_lstm
+python scripts/lstm_train_test_ped.py --train_features ../pedestrian/train  --val_features ../pedestrian/val  --name ped_mis_no_rot --mis_loss
+
+python scripts/lstm_train_test_ped.py --train_features ../pedestrian/train_.pkl  --val_features ../pedestrian/val_.pkl --name ped_lstm
+
+
+python scripts/lstm_train_test_nri.py --train_features ../nridata/train.pkl  --val_features ../nridata/val.pkl --name nri5_lstm 
+python scripts/lstm_train_test_nri.py --train_features ../nridata/train10.pkl  --val_features ../nridata/val10.pkl --name nri10_lstm
 
 
 models:
@@ -66,6 +64,8 @@ nll: lane_nll_naut
 dyna: nll_dyna_local
 
 ## pedestrian
+
+python scripts/ped_train.py --dataset_path ../pedestrian --rho-reg --batch_size 1 --val_batch_size 1 --model_name ped_nodyna_hotel --batches_per_epoch 1400 --val_batches 40 --epochs 100 --loss nll --evaluation #--train
 
 scttcov: ped_cstconv
 nll: ped_nodyna
