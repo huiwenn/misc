@@ -174,6 +174,8 @@ class ECCONetwork(nn.Module):
         Computes 1 simulation timestep"""
         p0_enc, v0_enc, p0, v0, a, other_feats, box, box_feats, fluid_mask, box_mask = inputs
         
+        print(v0_enc.shape)
+        print(other_feats.shape)
         if states is None:
             if other_feats is None:
                 feats = v0_enc
