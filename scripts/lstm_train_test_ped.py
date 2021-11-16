@@ -61,6 +61,11 @@ def parse_arguments() -> Any:
         help="rotationally normalize the trajectories if non-map baseline is used",
     )
     parser.add_argument(
+        "--normalize",
+        action="store_true",
+        help="translational normalize the trajectories if non-map baseline is used",
+    )
+    parser.add_argument(
         "--use_delta",
         action="store_true",
         help="Train on the change in position, instead of absolute position",
@@ -538,7 +543,6 @@ def validate(
         for di in range(output_length):
             decoder_output, decoder_hidden = decoder(decoder_input,
                                                      decoder_hidden)
-
             output = Gaussian2d(decoder_output)
 
             decoder_outputs[:, di, :] = output
@@ -548,9 +552,9 @@ def validate(
 
             # Use own predictions as inputs at next step
             decoder_input = output
-            de.append((torch.sqrt((decoder_output[:, 0] - target[:, di, 0])**2 +
-                               (decoder_output[:, 1] - target[:, di, 1])**2)*mask).detach().cpu().numpy())
-
+            # *mask
+            de.append(torch.sqrt((decoder_output[:, 0] - target[:, di, 0])**2 +
+                               (decoder_output[:, 1] - target[:, di, 1])**2).detach().cpu().numpy())
             miss.append(quantile_loss(output[:, :5], target[:, di, :2]).detach().cpu().numpy())
             covv.append(get_coverage(output[:, :5], target[:, di, :2]).detach().cpu().numpy())
             # Use own predictions as inputs at next step
@@ -558,8 +562,8 @@ def validate(
         # Get average loss for pred_len
         loss = loss / output_length
         total_loss.append(loss)
-        ade = np.mean(np.array(de))
-        ades.append(ade)
+        #ade = np.mean(np.array(de))
+        ades.append(np.concatenate(de,axis=0))
         fde = de[-1]
         fdes = np.concatenate([fdes,fde])
         mis.append(np.mean(miss))
@@ -570,7 +574,7 @@ def validate(
 
     # Save
     val_loss = sum(total_loss) / len(total_loss)
-    ade = sum(ades)/len(ades)
+    ade = np.mean(np.array(ades))
     fde = np.mean(fdes)
     mrs = np.mean(mis)
     cov = np.mean(cov)
@@ -772,8 +776,11 @@ class PedestrianLstm(dataflow.RNGDataFlow):
             #print('normalizing')
             if self.args.rotation:
                 normalized = baseline_utils.full_norm(wholetraj, self.args)
-            else:
+            elif self.args.normalize:
                 normalized = baseline_utils.translation_norm(wholetraj)
+            else:
+                normalized = wholetraj
+
             self.input_data = normalized[:, :self.args.obs_len, :]
             self.output_data = normalized[:, self.args.obs_len:, :]
             self.data_size = self.input_data.shape[0]

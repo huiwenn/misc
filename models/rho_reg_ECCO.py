@@ -163,7 +163,8 @@ class ECCONetwork(nn.Module):
         # scale in pecco is (1.0 / 128) 
         self.pos_correction = (1.0 / 128) * output
         #self.pos_correction = (1.0 / 4) * output
-        #self.pos_correction[...,0,:] = (1.0 / 16) * self.pos_correction[...,0,:]
+        #self.pos_correction[...,1:,:] = (1.0 / 8) * self.pos_correction[...,1:,:]
+        #print(self.pos_correction) check scale of this
         return self.pos_correction
     
     def forward(self, inputs, states=None):

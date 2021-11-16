@@ -132,6 +132,7 @@ class ParticlesNetwork(nn.Module):
         fluid_feats = torch.cat(fluid_feats, -2)
 
         # compute the correction by accumulating the output through the network layers
+
         output_conv_fluid = self.conv_fluid(p, p, fluid_feats, fluid_mask)
         output_dense_fluid = self.dense_fluid(fluid_feats)
         
