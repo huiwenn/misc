@@ -115,7 +115,7 @@ def train():
             batch['lane_norm'] = torch.zeros(batch_size, 1, 2, device=device)
             batch['lane_mask'] = torch.ones(batch_size, 1, 1, device=device)
 
-        m0 = -5*torch.eye(2, device=device).reshape((1,2,2)).repeat((batch_size, 60, 1, 1))
+        m0 = -5*torch.eye(2, device=device).reshape((1,2,2)).repeat((batch_size//args.batch_divide, 60, 1, 1))
         sigma0 = calc_sigma(m0)
 
         inputs = ([
