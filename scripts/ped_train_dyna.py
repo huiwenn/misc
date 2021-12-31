@@ -113,7 +113,7 @@ def train():
     def train_one_batch(model, batch, loss_f, train_window=2):
 
         batch_size = args.batch_size
-        m0 = -5*torch.eye(2, device=device).reshape((1,2,2)).repeat((batch_size//args.batch_divide, 60, 1, 1)) 
+        m0 = -5*torch.eye(2, device=device).reshape((1,2,2)).repeat((batch_size//args.batch_divide, 40, 1, 1)) 
         # torch.zeros((batch['pos_enc'].shape[0], 60, 2, 2), device=device)
         sigma0 = calc_sigma(m0)
        
