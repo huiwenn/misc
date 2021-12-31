@@ -18,17 +18,15 @@ class PedestrainPklLoader(dataflow.RNGDataFlow):
             self.rng.shuffle(pkl_list)
             
         for pkl_path in pkl_list:
-            try:
-                with open(pkl_path, 'rb') as f:
-                    data = pickle.load(f)
-                if sum(data['man_mask']) > self.max_num:
-                    continue
-                if 'pos12' not in data.keys():
-                    continue
-                yield data
-            except:
-                print('datareading error')
+    
+            with open(pkl_path, 'rb') as f:
+                data = pickle.load(f)
+            if sum(data['man_mask']) > self.max_num:
                 continue
+            if 'pos12' not in data.keys():
+                continue
+            yield data
+
 
 
 def read_pkl_data(data_path: str, batch_size: int, 
