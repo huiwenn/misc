@@ -119,6 +119,8 @@ def train():
        
         box_zeros = torch.zeros(batch_size, 1, 2, device=device)
         boxnorm_zeros = torch.zeros(batch_size, 1, 2, device=device)
+        
+        print(batch['pos_enc'].size, batch['vel_enc'].size)
 
         inputs = ([
             batch['pos_enc'], batch['vel_enc'], 
