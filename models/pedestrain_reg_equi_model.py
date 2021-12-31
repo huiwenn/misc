@@ -196,7 +196,8 @@ class ParticlesNetwork(nn.Module):
 
         # a = (v0 - v0_enc[...,-1,:]) / self.timestep
         p1, v1 = self.update_pos_vel(p0, v0, a)
-        print(fluid_mask.shape())
+
+        print('maskshape', fluid_mask.shape())
         pos_correction = self.compute_correction(p1, v1, feats, fluid_mask)
         p_corrected, v_corrected = self.apply_correction(p0, p1, pos_correction[..., 0, :])
         m_matrix = pos_correction[..., 1:, :]
