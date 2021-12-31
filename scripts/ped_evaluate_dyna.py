@@ -65,7 +65,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
 
         pos0 = batch['pos0']
         vel0 = batch['vel0']
-        m0 = -5*torch.eye(2, device=device).reshape((1,2,2)).repeat((batch['pos_enc'].shape[0], 60, 1, 1)) #torch.zeros((batch_size, 60, 2, 2), device=device)
+        m0 = -5*torch.eye(2, device=device).reshape((1,2,2)).repeat((batch['pos_enc'].shape[0], batch['pos0'].shape[1], 1, 1)) #torch.zeros((batch_size, 60, 2, 2), device=device)
         for j in range(train_window-1):
             pos_enc = torch.unsqueeze(pos0, 2)
             vel_enc = torch.unsqueeze(vel0, 2)

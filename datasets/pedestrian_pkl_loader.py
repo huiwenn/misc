@@ -20,7 +20,6 @@ class PedestrainPklLoader(dataflow.RNGDataFlow):
         for pkl_path in pkl_list:
             with open(pkl_path, 'rb') as f:
                 data = pickle.load(f)
-            print(data['man_mask'].shape)  
             data['man_mask'] = data['man_mask'][:self.max_num]
             if sum(data['man_mask']) > self.max_num:
                 continue
