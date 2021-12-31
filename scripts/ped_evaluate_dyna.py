@@ -38,7 +38,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         
         batch = process_batch_ped(sample, device)
 
-        m0 = -5*torch.eye(2, device=device).reshape((1,2,2)).repeat((batch['pos_enc'].shape[0], 60, 1, 1))
+        m0 = -5*torch.eye(2, device=device).reshape((1,2,2)).repeat((batch['pos_enc'].shape[0], batch['pos0'].shape[1], 1, 1))
         #torch.zeros((batch['pos_enc'].shape[0], 60, 2, 2), device=device)
         sigma0 = calc_sigma(m0)
 
