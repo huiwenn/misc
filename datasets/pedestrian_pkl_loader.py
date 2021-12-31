@@ -18,9 +18,10 @@ class PedestrainPklLoader(dataflow.RNGDataFlow):
             self.rng.shuffle(pkl_list)
             
         for pkl_path in pkl_list:
-            data['man_mask'] = data['man_mask'][:self.max_num]
             with open(pkl_path, 'rb') as f:
                 data = pickle.load(f)
+            print(data['man_mask'].shape)  
+            data['man_mask'] = data['man_mask'][:self.max_num]
             if sum(data['man_mask']) > self.max_num:
                 continue
             if 'pos12' not in data.keys():
