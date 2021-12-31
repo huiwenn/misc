@@ -5,7 +5,7 @@ import pickle
 import os
 
 class PedestrainPklLoader(dataflow.RNGDataFlow):
-    def __init__(self, data_path: str, shuffle: bool=True, max_num=60):
+    def __init__(self, data_path: str, shuffle: bool=True, max_num=40):
         super(PedestrainPklLoader, self).__init__()
         self.data_path = data_path
         self.shuffle = shuffle
