@@ -61,11 +61,19 @@ lstm: ./checkpoints/lstmfixed/LSTM_rollout30.pth.tar
 lstmmis:  ./checkpoints/mis_no_rot/LSTM_rollout30.pth.tar 
 cstconv: ablation
 nll: lane_nll_naut
-dyna: nll_dyna_local
+dyna: nll_dyna_local 
+good dyna: newdyna
 
 ## pedestrian
 
-python scripts/ped_train.py --dataset_path ../pedestrian --rho-reg --batch_size 1 --val_batch_size 1 --model_name ped_nodyna_hotel --batches_per_epoch 1400 --val_batches 40 --epochs 100 --loss nll --evaluation #--train
+python scripts/ped_train.py --dataset_path ../pedestrian --rho-reg --batch_size 1 --val_batch_size 1 --model_name ped_nodyna_hotel --batches_per_epoch 1400 --val_batches 40 --epochs 100 --loss nll --train #--evaluation 
+python scripts/ped_train_dyna.py --dataset_path ../pedestrian --rho-reg --batch_size 1 --val_batch_size 1 --model_name ped_nodyna_hotel --batches_per_epoch 1400 --val_batches 40 --epochs 100 --loss nll --train #--evaluation 
+
+
+python3.6 train.py --eval_every 10 --vis_every 1 --train_data_dict trajnet_train.pkl --eval_data_dict trajnet_val.pkl --offline_scene_graph no --preprocess_workers 5 --log_dir ../experiments/pedestrians/models --log_tag _trajnet_first --train_epochs 100 --augment --conf ../experiments/pedestrians/models/eth_vel/config.json" 
+
+
+python scripts/ped_train_dyna.py --dataset_path ../pedestrian/ped_original/ --rho-reg --batch_size 1 --val_batch_size 1 --model_name peddyna_new --batches_per_epoch 1400 --val_batches 40 --epochs 100 --loss nll --evaluation
 
 scttcov: ped_cstconv
 nll: ped_nodyna

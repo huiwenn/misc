@@ -22,7 +22,7 @@ from torch.utils.tensorboard import SummaryWriter
 #os.environ["NCCL_DEBUG"] = "INFO"
 
 parser = argparse.ArgumentParser(description="Training setting and hyperparameters")
-parser.add_argument('--cuda_visible_devices', default='0')#,1,2,3,4,5,6,7')
+parser.add_argument('--cuda_visible_devices', default='0,1,2,3,4,5,6,7')
 parser.add_argument('--dataset_path', default='/path/to/trajnetplusplus_dataset/', 
                     help='path to dataset folder, which contains train and val folders')
 parser.add_argument('--train_window', default=6, type=int, help='how many timestamps to iterate in training')
@@ -51,11 +51,10 @@ parser.set_defaults(representation=True)
 args = parser.parse_args()
 
 os.environ['CUDA_VISIBLE_DEVICES'] = args.cuda_visible_devices
-
 model_name = args.model_name
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print("using device", device)
+print("using device", device, args.cuda_visible_devices)
 
 val_path = os.path.join(args.dataset_path, 'val/hotel') #, 'lane_data'
 train_path = os.path.join(args.dataset_path, 'train/hotel') #, 'lane_data'
