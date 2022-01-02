@@ -35,7 +35,7 @@ class ArgoverseDataset(IterableDataset):
             lane_mask = np.zeros(self.max_lane_nodes, dtype=np.float32)
             lane_mask[:len(data['lane'])] = 1.0
             data['lane_mask'] = [lane_mask]
-            data['lane'] = data['lane'][0]
+            data['lane'] = np.array(data['lane'][0])
             if data['lane'].shape[0] > self.max_lane_nodes:
                 continue
 
