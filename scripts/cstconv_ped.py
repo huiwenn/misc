@@ -121,7 +121,8 @@ def train():
         batch['vel_enc'] = torch.cat([batch['vel_enc'], zero_2s], dim = -1)
         batch['pos_enc'] = torch.cat([batch['pos_enc'], zero_2s], dim = -1)
 
-        m0 = torch.zeros((batch['pos_enc'].shape[0], 60, 2, 2), device=device)
+        #m0 = torch.zeros((batch['pos_enc'].shape[0], 60, 2, 2), device=device)
+        m0 = -5*torch.eye(2, device=device).reshape((1,2,2)).repeat((batch_size//args.batch_divide, batch['pos0'].shape[1], 1, 1))
         inputs = ([
             batch['pos_enc'], batch['vel_enc'],
             batch['pos0'], batch['vel0'],
