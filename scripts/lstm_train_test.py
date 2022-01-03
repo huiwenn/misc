@@ -933,7 +933,7 @@ def main():
                 model_utils,
                 prev_loss,
                 decrement_counter,
-                ROLLOUT_LENS[],
+                ROLLOUT_LENS[-1],
             )
             end = time.time()
             print('decrement_counter',decrement_counter)
