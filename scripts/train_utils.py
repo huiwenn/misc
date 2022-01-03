@@ -3,6 +3,8 @@ import gc
 import numpy as np
 
 def get_agent(pr: object, gt: object, pr_id: object, gt_id: object, agent_id: object, device: object = 'cpu', pr_m1: object = None) -> object: # only works for batch size 1
+    agent_id = np.expand_dims(agent_id, 1)
+
     pr_agent = pr[pr_id == agent_id, :]
     gt_agent = gt[gt_id == agent_id, :]
 
@@ -128,6 +130,7 @@ def normalize_input(tensor_dict, scale, train_window):
 
 def process_batch(batch, device, train_window = 30): 
     '''processing script for new dataset'''
+    
     batch_size = len(batch['city'])
 
     batch['lane_mask'] = [np.array([0])] * batch_size
@@ -137,98 +140,35 @@ def process_batch(batch, device, train_window = 30):
     for k in ['lane', 'lane_norm']:
         batch_tensor[k] = torch.tensor(np.stack(batch[k]), dtype=torch.float32, device=device)
 
-    pos_2s = torch.tensor(batch['p_in'], dtype=torch.float32, device=device)
-    vel_2s = torch.tensor(batch['v_in'], dtype=torch.float32, device=device)
-    batch_tensor['pos_2s'] = pos_2s[...,:-1,:]
-    batch_tensor['vel_2s'] = vel_2s[...,:-1,:]
-    batch_tensor['pos0'] = pos_2s[..., -1,:]
-    batch_tensor['vel0'] = vel_2s[..., -1,:]
-
-    p_out = np.stack(batch['p_out'])
-    v_out = np.stack(batch['v_out'])
-    for k in range(30):
-        batch_tensor['pos' + str(k+1)] = torch.tensor(p_out[:, :, k, :], dtype=torch.float32, device=device)
-        batch_tensor['vel' + str(k+1)] = torch.tensor(v_out[:, :, k, :], dtype=torch.float32, device=device)
-
-    for k in ['car_mask', 'lane_mask']:
-        batch_tensor[k] = torch.tensor(np.stack(batch[k]), dtype=torch.float32, device=device).unsqueeze(-1)
-
-    track_id = np.stack(batch['track_id'])
-    for k in range(30):
-        batch_tensor['track_id' + str(k)] = track_id[..., k, :]
-
-    for k in ['city', 'agent_id', 'scene_idx']:
-        batch_tensor[k] = np.stack(batch[k])
-    
-    batch_tensor['agent_id'] = batch_tensor['agent_id'][:, np.newaxis]
-
-    batch_tensor['car_mask'] = batch_tensor['car_mask'].squeeze(-1)
-    accel = torch.zeros(batch_size, 1, 2).to(device)
-    batch_tensor['accel'] = accel
-
-    # batch sigmas: starting with two zero 2x2 matrices
-    batch_tensor['sigmas'] = torch.zeros(batch_size, 60, 4, 2).to(device)
-
-    return batch_tensor
-
-
-def process_batch_mod(batch, device, train_window = 30): 
-    '''processing script for new dataset'''
-    batch_size = len(batch['city'])
-
-    batch['lane_mask'] = [np.array([0])] * batch_size
+    batch_size = len(batch['pos0'])
 
     batch_tensor = {}
-
-    for k in ['lane', 'lane_norm']:
-        batch_tensor[k] = torch.tensor(np.stack(batch[k]), dtype=torch.float32, device=device)
-
-    pos_2s = torch.tensor(batch['p_in'], dtype=torch.float32, device=device)
-    vel_2s = torch.tensor(batch['v_in'], dtype=torch.float32, device=device)
-    batch_tensor['pos_2s'] = pos_2s
-    batch_tensor['vel_2s'] = vel_2s
-
-    batch_tensor['p_out'] = torch.tensor(batch['p_out'], dtype=torch.float32, device=device)
-    batch_tensor['v_out'] = torch.tensor(batch['v_out'], dtype=torch.float32, device=device)
-
-    for k in ['car_mask', 'lane_mask']:
-        batch_tensor[k] = torch.tensor(np.stack(batch[k]), dtype=torch.float32, device=device).unsqueeze(-1)
-
-    track_id = np.stack(batch['track_id'])
-    for k in range(30):
-        batch_tensor['track_id' + str(k)] = track_id[..., k, :]
-
-    for k in ['city', 'agent_id', 'scene_idx']:
-        batch_tensor[k] = np.stack(batch[k])
-    
-    batch_tensor['agent_id'] = batch_tensor['agent_id'][:, np.newaxis]
-
-    batch_tensor['car_mask'] = batch_tensor['car_mask'].squeeze(-1)
-    accel = torch.zeros(batch_size, 1, 2).to(device)
-    batch_tensor['accel'] = accel
-
-    # batch sigmas: starting with two zero 2x2 matrices
-    batch_tensor['sigmas'] = torch.zeros(batch_size, 60, 4, 2).to(device)
-
-    return batch_tensor
-
-def process_batch_ped(batch, device, train_window = 12, train_particle_num=60):
-    batch_tensor = {}
-
-    batch_tensor['man_mask'] = torch.tensor(np.stack(batch['man_mask'])[:,:train_particle_num],
-                                    dtype=torch.float32, device=device).unsqueeze(-1)
-
     convert_keys = (['pos' + str(i) for i in range(train_window + 1)] + 
                     ['vel' + str(i) for i in range(train_window + 1)] + 
-                    ['pos_enc', 'vel_enc'])
-    batch_tensor['scene_idx'] = np.stack(batch['scene_idx'])
-        
-    for k in convert_keys:
-        batch_tensor[k] = torch.tensor(np.stack(batch[k])[:,:train_particle_num][...,:2],
-                                        dtype=torch.float32, device=device)
+                    ['pos_2s', 'vel_2s', 'lane', 'lane_norm'])
 
-    accel = batch_tensor['vel0'] - batch_tensor['vel_enc'][...,-1,:]
-    # accel = torch.zeros(batch_size, 1, 2).to(device)
+    for k in convert_keys:
+        batch_tensor[k] = torch.tensor(np.stack(batch[k])[...,:2], dtype=torch.float32, device=device)
+        
+    '''
+    if use_normalize_input:
+        batch_tensor, max_pos = normalize_input(batch_tensor, normalize_scale, train_window)
+    ''' 
+    for k in ['car_mask', 'lane_mask']:
+        batch_tensor[k] = torch.tensor(np.stack(batch[k]), dtype=torch.float32, device=device).unsqueeze(-1)
+
+    for k in ['track_id' + str(i) for i in range(30)] + ['agent_id']:
+        batch_tensor[k] = np.array(batch[k])
+    
+    batch_tensor['car_mask'] = batch_tensor['car_mask'].squeeze(-1)
+    accel = torch.zeros(batch_size, 1, 2).to(device)
     batch_tensor['accel'] = accel
+
+
+    # batch sigmas: starting with two zero 2x2 matrices
+    batch_tensor['scene_idx'] = batch['scene_idx']
+    batch_tensor['city'] = batch['city']
+    batch_tensor['sigmas'] = torch.zeros(batch_size, 60, 4, 2).to(device)
+    #batch_tensor
     return batch_tensor
 

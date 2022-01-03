@@ -195,7 +195,7 @@ def train():
                 if (batch_itr // args.batch_divide) % 10 == 0:
                     print("... batch " + str((batch_itr // args.batch_divide) + 1), end='', flush=True)
             sub_idx += 1
-
+            
             batch_tensor = process_batch(batch, device, train_window=args.train_window)
             del batch
 

@@ -50,8 +50,8 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         lane_normals = data['lane_norm']
         agent_id = data['agent_id']
         city = data['city']
-        scenes = data['scene_idx'].tolist()
-
+        scenes = data['scene_idx']
+        
         m0 = -10*torch.eye(2, device=device).reshape((1,2,2)).repeat((batch_size, 60, 1, 1))
         sigma0 = calc_sigma(m0)
 
@@ -74,9 +74,10 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         losses = loss_f(pr_pos1, gt_pos1, sigma0, data['car_mask'].squeeze(-1))
 
         pr_agent, gt_agent = get_agent(pr_pos1, data['pos1'],
-                                       data['track_id0'].squeeze(-1), 
-                                       data['track_id1'].squeeze(-1), 
+                                       data['track_id0'], 
+                                       data['track_id1'], 
                                        agent_id, device, pr_m1=pr_m1)
+
         
         sigmas.append(sigma0.unsqueeze(1).detach().cpu())
         pred.append(pr_agent.unsqueeze(1).detach().cpu())
@@ -110,8 +111,8 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
             losses += loss_f(pr_pos1, gt_pos1, sigma0, data['car_mask'].squeeze(-1))
 
             pr_agent, gt_agent = get_agent(pr_pos1, data['pos'+str(j+2)],
-                                           data['track_id0'].squeeze(-1),
-                                           data['track_id'+str(j+1)].squeeze(-1),
+                                           data['track_id0'],
+                                           data['track_id'+str(j+1)],
                                            agent_id, device, pr_m1=sigma0)
 
             sigmas.append(sigma0.unsqueeze(1).detach().cpu())
