@@ -49,7 +49,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         data['pos0'] = torch.cat([data['pos0'], pos_zero], dim = -1)
         data['vel0'] = torch.cat([data['vel0'], pos_zero], dim = -1)
 
-        lane_zero = torch.zeros(batch_size, 900, 1, device=device)
+        lane_zero = torch.zeros(batch_size, 650, 1, device=device)
         data['lane'] = torch.cat([data['lane'], lane_zero], dim = -1)
         data['lane_norm'] = torch.cat([data['lane_norm'], lane_zero], dim = -1)
 
