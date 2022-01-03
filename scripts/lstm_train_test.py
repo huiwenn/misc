@@ -578,7 +578,7 @@ def validate(
         fde = de[-1]
 
         fdes = np.concatenate([fdes,fde])
- 
+        
         if rollout_len>=output_length-1:
             cov_1s = np.concatenate([cov_1s,covv[9]])
             cov_2s = np.concatenate([cov_2s,covv[19]])
@@ -945,9 +945,13 @@ def main():
                     if decrement_counter > 2 or args.test:
                         break
 
-            # If val loss increased 3 times consecutively, go to next rollout length
-            if decrement_counter > 2 or args.test:
-                continue
+
+
+
+
+
+
+
         
         if args.test:
             start = time.time()
@@ -970,6 +974,9 @@ def main():
             print(
                 f"Validation completed in {(end - start) / 60.0} mins, Total time: {(end - global_start_time) / 60.0} mins"
             )
+        
+        if decrement_counter > 2:
+            break
         '''
         start_time = time.time()
 
