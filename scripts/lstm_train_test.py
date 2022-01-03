@@ -658,14 +658,17 @@ class LSTMDataset(Dataset):
         if args.rotation:
             normalized = baseline_utils.full_norm(wholetraj, args)
             new_path = data_path[:-4] + '_rotation.npy'
+            with open(new_path, 'wb') as f:
+                np.save(f, normalized)
         elif args.translation:
             normalized = baseline_utils.translation_norm(wholetraj) #.full_norm(wholetraj, args)#
             new_path = data_path[:-4] + '_transi.npy'
+            with open(new_path, 'wb') as f:
+                np.save(f, normalized)
         else:
             normalized = wholetraj
 
-        with open(new_path, 'wb') as f:
-            np.save(f, normalized)
+
     
         self.input_data = normalized[:, :args.obs_len, :]
         self.output_data = normalized[:, args.obs_len:, :]
