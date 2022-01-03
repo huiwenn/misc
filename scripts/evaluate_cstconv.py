@@ -50,8 +50,8 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         data['vel0'] = torch.cat([data['vel0'], pos_zero], dim = -1)
 
         lane_zero = torch.zeros(batch_size, 900, 1, device=device)
-        batch['lane'] = torch.cat([batch['lane'], lane_zero], dim = -1)
-        batch['lane_norm'] = torch.cat([batch['lane_norm'], lane_zero], dim = -1)
+        data['lane'] = torch.cat([batch['lane'], lane_zero], dim = -1)
+        data['lane_norm'] = torch.cat([batch['lane_norm'], lane_zero], dim = -1)
 
         data['accel'] = torch.cat([data['accel'], torch.zeros(data['accel'].shape[:-1],device=device).unsqueeze(-1)], dim = -1)
         zero_2s = torch.unsqueeze(torch.zeros(data['vel_2s'].shape[:-1], device=device),-1)
