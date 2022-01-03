@@ -760,7 +760,8 @@ class LSTMDataset(Dataset):
         '''
         with open(data_path, 'rb') as f:
             wholetraj = np.load(f)
-            
+        
+        print('wholetraj', wholetraj.shape)
         print('normalizing')
         if args.rotation:
             normalized = baseline_utils.full_norm(wholetraj, args)
