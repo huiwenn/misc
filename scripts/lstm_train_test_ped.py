@@ -44,10 +44,16 @@ def parse_arguments() -> Any:
                         default=12,
                         type=int,
                         help="Prediction Horizon")
+                        
     parser.add_argument("--name",
                         default='lstm',
                         type=str,
                         help="model name")
+    parser.add_argument(
+        "--translation",
+        action="store_true",
+        help="translation normalize the trajectories if non-map baseline is used",
+    )
     parser.add_argument(
         "--rotation",
         action="store_true",
@@ -648,20 +654,20 @@ class LSTMDataset(Dataset):
         with open(data_path, 'rb') as f:
             wholetraj = np.load(f)
         
-        print('wholetraj', wholetraj.shape)
-        
-        '''
         print('normalizing')
         if args.rotation:
             normalized = baseline_utils.full_norm(wholetraj, args)
+            new_path = data_path[:-4] + '_rotation.npy'
+            with open(new_path, 'wb') as f:
+                np.save(f, normalized)
+        elif args.translation:
+            normalized = baseline_utils.translation_norm(wholetraj) #.full_norm(wholetraj, args)#
+            new_path = data_path[:-4] + '_transi.npy'
+            with open(new_path, 'wb') as f:
+                np.save(f, normalized)
         else:
-            normalized = baseline_utils.translation_norm(wholetraj, zero_point=8) #.full_norm(wholetraj, args)#
-        
-        new_path = data_path[:-4] + '_transi.npy'
-        with open(new_path, 'wb') as f:
-            np.save(f, normalized)
-        '''
-        normalized = wholetraj
+            normalized = wholetraj
+
         self.input_data = normalized[:, :args.obs_len, :]
         self.output_data = normalized[:, args.obs_len:, :]
         self.data_size = self.input_data.shape[0]
@@ -868,10 +874,11 @@ def main():
         prev_loss = best_loss
         rollout_epoch = 0
         if not args.test:
-            rollout_epoch+=1
-            if rollout_epoch > 100:
-                break
+
             while epoch < args.end_epoch:
+                rollout_epoch+=1
+                if rollout_epoch > 100:
+                    break
                 start = time.time()
                 train(
                     train_loader,
@@ -917,7 +924,7 @@ def main():
                     )
 
                     # If val loss increased 3 times consecutively, go to next rollout length
-                    if decrement_counter >= 2 or args.test:
+                    if decrement_counter > 2 or args.test:
                         break
 
         '''

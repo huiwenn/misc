@@ -896,10 +896,11 @@ def main():
         prev_loss = best_loss
         rollout_epoch = 0
         if not args.test:
-            rollout_epoch+=1
-            if rollout_epoch > 100:
-                break
             while epoch < args.end_epoch:
+
+                rollout_epoch+=1
+                if rollout_epoch > 100:
+                    break
                 start = time.time()
                 train(
                     train_loader,
