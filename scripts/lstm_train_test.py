@@ -915,6 +915,10 @@ def main():
                     if decrement_counter > 2 or args.test:
                         break
 
+        # If val loss increased 3 times consecutively, go to next rollout length
+        if decrement_counter > 2 or args.test:
+            break
+        
         if args.test:
             start = time.time()
             prev_loss, decrement_counter = validate(
@@ -929,17 +933,13 @@ def main():
                 model_utils,
                 prev_loss,
                 decrement_counter,
-                rollout_len,
+                ROLLOUT_LENS[],
             )
             end = time.time()
             print('decrement_counter',decrement_counter)
             print(
                 f"Validation completed in {(end - start) / 60.0} mins, Total time: {(end - global_start_time) / 60.0} mins"
             )
-
-        # If val loss increased 3 times consecutively, go to next rollout length
-        if decrement_counter > 2 or args.test:
-            break
         '''
         start_time = time.time()
 
