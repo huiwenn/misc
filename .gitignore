@@ -6,3 +6,4 @@ scripts/vis.ipynb
 *pycache*
 lstm_logs/*
 results/*
+runs/*

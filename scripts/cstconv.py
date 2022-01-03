@@ -113,7 +113,7 @@ def train():
 
     def train_one_batch(model, batch, loss_f, train_window=2):
 
-        batch_size = args.batch_size
+        batch_size = int(args.batch_size / args.batch_divide)
         if not args.use_lane:
             batch['lane'] = torch.zeros(batch_size, 1, 3, device=device)
             batch['lane_norm'] = torch.zeros(batch_size, 1, 3, device=device)
@@ -122,6 +122,10 @@ def train():
         pos_zero = torch.unsqueeze(torch.zeros(batch['pos0'].shape[:-1], device=device),-1)
         batch['pos0'] = torch.cat([batch['pos0'], pos_zero], dim = -1)
         batch['vel0'] = torch.cat([batch['vel0'], pos_zero], dim = -1)
+
+        lane_zero = torch.zeros(batch_size, 900, 1, device=device)
+        batch['lane'] = torch.cat([batch['lane'], lane_zero], dim = -1)
+        batch['lane_norm'] = torch.cat([batch['lane_norm'], lane_zero], dim = -1)
 
         batch['accel'] = torch.cat([batch['accel'], torch.zeros(batch['accel'].shape[:-1],device=device).unsqueeze(-1)], dim = -1)
         zero_2s = torch.unsqueeze(torch.zeros(batch['vel_2s'].shape[:-1], device=device),-1)

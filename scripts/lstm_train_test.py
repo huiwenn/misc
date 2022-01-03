@@ -751,11 +751,16 @@ class LSTMDataset(Dataset):
             mode: train/val/test mode
 
         """
+        '''
         with open(data_path, 'rb') as f:
             data_dict = pkl.load(f)
 
         # Get input
         wholetraj = np.concatenate([data_dict["input"],data_dict["output"]],axis=1)
+        '''
+        with open(data_path, 'rb') as f:
+            wholetraj = np.load(f)
+            
         print('normalizing')
         if args.rotation:
             normalized = baseline_utils.full_norm(wholetraj, args)
