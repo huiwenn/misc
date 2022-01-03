@@ -35,7 +35,7 @@ def parse_arguments() -> Any:
     parser.add_argument("--model_path",
                         required=False,
                         type=str,
-                        help="path to the saved model")
+                        help="path to the saved model. full path")
     parser.add_argument("--obs_len",
                         default=19,
                         type=int,
@@ -136,7 +136,7 @@ class EncoderRNN(nn.Module):
     def __init__(self,
                  input_size: int = 2,
                  embedding_size: int = 8,
-                 hidden_size: int = 16):
+                 hidden_size: int = 32):
         """Initialize the encoder network.
 
         Args:
@@ -168,7 +168,7 @@ class EncoderRNN(nn.Module):
 
 class DecoderRNN(nn.Module):
     """Decoder Network."""
-    def __init__(self, embedding_size=8, hidden_size=16, output_size=2):
+    def __init__(self, embedding_size=8, hidden_size=32, output_size=2):
         """Initialize the decoder network.
 
         Args:
@@ -570,7 +570,8 @@ def validate(
         fde = de[-1]
 
         fdes = np.concatenate([fdes,fde])
-        if rollout_len>=output_length:
+ 
+        if rollout_len>=output_length-1:
             cov_1s = np.concatenate([cov_1s,covv[9]])
             cov_2s = np.concatenate([cov_2s,covv[19]])
             cov_3s = np.concatenate([cov_3s,covv[29]])
@@ -911,9 +912,34 @@ def main():
                     )
 
                     # If val loss increased 3 times consecutively, go to next rollout length
-                    if decrement_counter >= 2 or args.test:
+                    if decrement_counter > 2 or args.test:
                         break
 
+        if args.test:
+            start = time.time()
+            prev_loss, decrement_counter = validate(
+                val_loader,
+                epoch,
+                criterion,
+                logger,
+                encoder,
+                decoder,
+                encoder_optimizer,
+                decoder_optimizer,
+                model_utils,
+                prev_loss,
+                decrement_counter,
+                rollout_len,
+            )
+            end = time.time()
+            print('decrement_counter',decrement_counter)
+            print(
+                f"Validation completed in {(end - start) / 60.0} mins, Total time: {(end - global_start_time) / 60.0} mins"
+            )
+
+        # If val loss increased 3 times consecutively, go to next rollout length
+        if decrement_counter > 2 or args.test:
+            break
         '''
         start_time = time.time()
 
