@@ -43,6 +43,8 @@ python scripts/train_nri.py --dataset_path ../nridata/one --rho-reg --batch_size
 ## LSTM
 python scripts/lstm_train_test.py --train_features ../argoverse_data/train_rose.pkl  --val_features ../argoverse_data/val_rose.pkl --model_path ./checkpoints/lstm/LSTM_rollout30.pth.tar --test
 
+python scripts/lstm_train_test.py --train_features ../argoverse/agents_train.npy  --val_features ../argoverse/agents_val.npy --test
+
 python scripts/lstm_train_test_ped.py --train_features ../pedestrian/train  --val_features ../pedestrian/val  --name ped_lstm
 python scripts/lstm_train_test_ped.py --train_features ../pedestrian/train  --val_features ../pedestrian/val  --name ped_mis_no_rot --mis_loss
 
