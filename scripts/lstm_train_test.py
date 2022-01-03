@@ -645,18 +645,19 @@ class LSTMDataset(Dataset):
             wholetraj = np.load(f)
         
         print('wholetraj', wholetraj.shape)
-        '''
+        
         print('normalizing')
         if args.rotation:
             normalized = baseline_utils.full_norm(wholetraj, args)
+            new_path = data_path[:-4] + '_rotation.npy'
         else:
             normalized = baseline_utils.translation_norm(wholetraj) #.full_norm(wholetraj, args)#
-
-        new_path = data_path[:-4] + '_transi.npy'
+            new_path = data_path[:-4] + '_rotation.npy'
+    
         with open(new_path, 'wb') as f:
             np.save(f, normalized)
-        '''
-        normalized = wholetraj
+    
+        #normalized = wholetraj
         self.input_data = normalized[:, :args.obs_len, :]
         self.output_data = normalized[:, args.obs_len:, :]
         self.data_size = self.input_data.shape[0]
@@ -690,7 +691,25 @@ class LSTMDataset(Dataset):
         )
 
 
-def nll_loss_2(pred: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
+
+def nll_loss_2( pred: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
+    loss = 0
+
+    for i, x in enumerate(data):
+        mu = pred[i, :2]
+        x_sigma = pred[i, 2]
+        y_sigma = pred[i, 3]
+        rho = pred[i, 4]
+        
+        off_diag = rho * x_sigma * y_sigma
+        C = torch.tensor([[torch.pow(x_sigma,2), off_diag], [off_diag, torch.pow(y_sigma,2)]], device=pred.device)
+        m = torch.distributions.MultivariateNormal(mu, covariance_matrix=C)
+        thisl =  -m.log_prob(x)
+        loss += thisl
+        
+    return loss/data.shape[0]
+
+def nll_loss_1(pred: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
     """Negative log loss for single-variate gaussian, can probably be faster"""
     x_mean = pred[:, 0]
     y_mean = pred[:, 1]
@@ -915,9 +934,9 @@ def main():
                     if decrement_counter > 2 or args.test:
                         break
 
-        # If val loss increased 3 times consecutively, go to next rollout length
-        if decrement_counter > 2 or args.test:
-            break
+            # If val loss increased 3 times consecutively, go to next rollout length
+            if decrement_counter > 2 or args.test:
+                continue
         
         if args.test:
             start = time.time()
