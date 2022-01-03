@@ -8,3 +8,6 @@ python scripts/train_dynamics.py --dataset_path /data/argoverse_data --rho-reg -
 #python scripts/train_dynamics.py --dataset_path ../argoverse_data --rho-reg --batch_size 32 --batch_divide 32 --val_batch_size 1 --model_name newdynatest --batches_per_epoch 3 --val_batches 5 --epochs 100 --loss nll --use_lane --train
 #python scripts/train_dynamics.py --dataset_path /data/argoverse --rho-reg --batch_size 1 --val_batch_size 1 --model_name newdyna --batches_per_epoch 600 --val_batches 20 --epochs 100 --loss nll --use_lane --train
 #python scripts/train_dynamics.py --dataset_path /data/argoverse --rho-reg --batch_size 1 --val_batch_size 1 --model_name newdyna --batches_per_epoch 600 --val_batches 20 --epochs 100 --loss nll --use_lane --train
+
+
+python scripts/cstconv.py --dataset_path ../argoverse --rho-reg --batch_size 1 --batch_divide 1 --val_batch_size 1 --use_lane --train --model_name ctsconv_argo --batches_per_epoch 150 --val_batches 30 --loss nll

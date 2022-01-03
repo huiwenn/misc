@@ -875,9 +875,6 @@ def get_coverage(pred: torch.Tensor, data: torch.Tensor, alpha=0.9):
     cover = torch.where(c_delta > 0, torch.ones(c_.shape, device=c_.device), torch.zeros(c_.shape, device=c_.device))
     return cover
 
-
-
-
 def main():
     """Main."""
     args = parse_arguments()
