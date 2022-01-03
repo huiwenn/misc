@@ -49,7 +49,7 @@ def parse_arguments() -> Any:
                         type=str,
                         help="model name")
     parser.add_argument(
-        "--normalize",
+        "--translation",
         action="store_true",
         help="rotationally normalize the trajectories if non-map baseline is used",
     )
