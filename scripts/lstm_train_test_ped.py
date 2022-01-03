@@ -104,7 +104,7 @@ def parse_arguments() -> Any:
                         help="Val batch size")
     parser.add_argument("--end_epoch",
                         type=int,
-                        default=100,
+                        default=1000,
                         help="Last epoch")
     parser.add_argument("--lr",
                         type=float,
@@ -861,7 +861,11 @@ def main():
         logger = Logger(log_dir, name="{}".format(rollout_len))
         best_loss = float("inf")
         prev_loss = best_loss
+        rollout_epoch = 0
         if not args.test:
+            rollout_epoch+=1
+            if rollout_epoch > 100:
+                break
             while epoch < args.end_epoch:
                 start = time.time()
                 train(

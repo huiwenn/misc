@@ -50,12 +50,13 @@ python scripts/lstm_train_test_ped.py --train_features ../pedestrian/train  --va
 
 python scripts/lstm_train_test_ped.py --train_features ../pedestrian/train_.pkl  --val_features ../pedestrian/val_.pkl --name ped_lstm
 
-
 python scripts/lstm_train_test_nri.py --train_features ../nridata/train.pkl  --val_features ../nridata/val.pkl --name nri5_lstm 
 python scripts/lstm_train_test_nri.py --train_features ../nridata/train10.pkl  --val_features ../nridata/val10.pkl --name nri10_lstm
 
 
-CUDA_VISIBLE_DEVICES=0 python scripts/lstm_train_test.py --train_features ../argoverse/agents_val_transi.npy  --val_features ../argoverse/agents_val_transi.npy --name lstm_argo_southtest
+CUDA_VISIBLE_DEVICES=0 python scripts/lstm_train_test.py --train_features ../argoverse/agents_val_transi.npy  --val_features ../argoverse/agents_val_transi.npy --name lstm_argo_southtest 
+
+CUDA_VISIBLE_DEVICES=0 python scripts/lstm_train_test.py --train_features ../argoverse/agents_val_transi.npy  --val_features ../argoverse/agents_val_transi.npy --name lstm_argo_mis --mis-metric
 
 CUDA_VISIBLE_DEVICES=0 python scripts/lstm_train_test_ped.py --train_features ../pedestrian/agents_train_transi.npy  --val_features ../pedestrian/agents_val_transi.npy --name lstm_ped_test
 
