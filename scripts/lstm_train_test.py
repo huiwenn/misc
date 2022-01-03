@@ -96,15 +96,15 @@ def parse_arguments() -> Any:
                         help="If true, only run the inference")
     parser.add_argument("--train_batch_size",
                         type=int,
-                        default=512,
+                        default=512, #512,
                         help="Training batch size")
     parser.add_argument("--val_batch_size",
                         type=int,
-                        default=512,
+                        default=512, #512,
                         help="Val batch size")
     parser.add_argument("--end_epoch",
                         type=int,
-                        default=1000,
+                        default=100,
                         help="Last epoch")
     parser.add_argument("--lr",
                         type=float,
@@ -121,6 +121,7 @@ def parse_arguments() -> Any:
 
 use_cuda = torch.cuda.is_available()
 if use_cuda:
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
     device = torch.device("cuda")
 else:
     device = torch.device("cpu")
@@ -371,7 +372,7 @@ def train(
     global global_step
     mse = nn.MSELoss()
 
-
+    batches = 0
     for i, (_input, target, helpers) in enumerate(train_loader):
         _input = _input.to(device)
         target = target.to(device)
@@ -446,6 +447,10 @@ def train(
                                   step=epoch)
 
         global_step += 1
+        
+        # TODO change back
+        #if i >=100:
+        #    break
 
 
 def validate(
@@ -491,6 +496,9 @@ def validate(
     cov_2s = []
     cov_3s = []
     for i, (_input, target, helpers) in enumerate(val_loader):
+        # TODO: change back
+        if i >= 100:
+            break
 
         _input = _input.to(device)
         target = target.to(device)
@@ -531,7 +539,7 @@ def validate(
         miss = []
         covv = []
         nlls = []
-        for di in range(output_length):
+        for di in range(rollout_len):
             decoder_output, decoder_hidden = decoder(decoder_input,
                                                      decoder_hidden)
 
@@ -540,27 +548,32 @@ def validate(
             decoder_outputs[:, di, :] = output
 
             # Update loss
+            #print('output', output[:, :2])
+            #print('target', target[:, di, :2])
             loss += criterion(output[:, :5], target[:, di, :2])
 
             # Use own predictions as inputs at next step
             decoder_input = output
             de.append(torch.sqrt((decoder_output[:, 0] - target[:, di, 0])**2 +
                                (decoder_output[:, 1] - target[:, di, 1])**2).detach().cpu().numpy())
+            #print('de',de)
             nlls.append(nll_loss_2(output[:, :5], target[:, di, :2]).detach().cpu().numpy())
             miss.append(quantile_loss(output[:, :5], target[:, di, :2]).detach().cpu().numpy())
             covv.append(get_coverage(output[:, :5], target[:, di, :2]).detach().cpu().numpy())
             # Use own predictions as inputs at next step
-
+        
         # Get average loss for pred_len
-        loss = loss / output_length
+        loss = loss / rollout_len
         total_loss.append(loss)
         ade = np.mean(np.array(de))
         ades.append(ade)
         fde = de[-1]
+
         fdes = np.concatenate([fdes,fde])
-        cov_1s = np.concatenate([cov_1s,covv[9]])
-        cov_2s = np.concatenate([cov_2s,covv[19]])
-        cov_3s = np.concatenate([cov_3s,covv[29]])
+        if rollout_len>=output_length:
+            cov_1s = np.concatenate([cov_1s,covv[9]])
+            cov_2s = np.concatenate([cov_2s,covv[19]])
+            cov_3s = np.concatenate([cov_3s,covv[29]])
         nll.append(np.mean(nlls))
         mis.append(np.mean(miss))
         cov.append(np.mean(covv))
@@ -571,6 +584,7 @@ def validate(
     ade = sum(ades)/len(ades)
     fde = np.mean(fdes)
     mrs = np.mean(mis)
+    nll = np.mean(nll)
     cov = np.mean(cov)
     cov1s = np.mean(cov_1s)
     cov2s = np.mean(cov_2s)
@@ -607,138 +621,6 @@ def validate(
 
     return val_loss, decrement_counter
 
-'''
-def infer_absolute(
-        test_loader: torch.utils.data.DataLoader,
-        encoder: EncoderRNN,
-        decoder: DecoderRNN,
-        start_idx: int,
-        forecasted_save_dir: str,
-        model_utils: ModelUtils,
-):
-    """Infer function for non-map LSTM baselines and save the forecasted trajectories.
-
-    Args:
-        test_loader: DataLoader for the test set
-        encoder: Encoder network instance
-        decoder: Decoder network instance
-        start_idx: start index for the current joblib batch
-        forecasted_save_dir: Directory where forecasted trajectories are to be saved
-        model_utils: ModelUtils instance
-
-    """
-    args = parse_arguments()
-    forecasted_trajectories = {}
-
-    for i, (_input, target, helpers) in enumerate(test_loader):
-
-        _input = _input.to(device)
-
-        batch_helpers = list(zip(*helpers))
-
-        helpers_dict = {}
-        for k, v in config.LSTM_HELPER_DICT_IDX.items():
-            helpers_dict[k] = batch_helpers[v]
-
-        # Set to eval mode
-        encoder.eval()
-        decoder.eval()
-
-        # Encoder
-        batch_size = _input.shape[0]
-        input_length = _input.shape[1]
-        input_shape = _input.shape[2]
-
-        # Initialize encoder hidden state
-        encoder_hidden = model_utils.init_hidden(
-            batch_size,
-            encoder.module.hidden_size if use_cuda else encoder.hidden_size)
-
-        # Encode observed trajectory
-        for ei in range(input_length):
-            encoder_input = _input[:, ei, :]
-            encoder_hidden = encoder(encoder_input, encoder_hidden)
-
-        # Initialize decoder input with last coordinate in encoder
-        decoder_input = encoder_input[:, :2]
-
-        # Initialize decoder hidden state as encoder hidden state
-        decoder_hidden = encoder_hidden
-
-        decoder_outputs = torch.zeros(
-            (batch_size, args.pred_len, 2)).to(device)
-
-        # Decode hidden state in future trajectory
-        for di in range(args.pred_len):
-            decoder_output, decoder_hidden = decoder(decoder_input,
-                                                     decoder_hidden)
-            decoder_outputs[:, di, :] = decoder_output
-
-            # Use own predictions as inputs at next step
-            decoder_input = decoder_output
-
-        # Get absolute trajectory
-        abs_helpers = {}
-        abs_helpers["REFERENCE"] = np.array(helpers_dict["DELTA_REFERENCE"])
-        abs_helpers["TRANSLATION"] = np.array(helpers_dict["TRANSLATION"])
-        abs_helpers["ROTATION"] = np.array(helpers_dict["ROTATION"])
-        abs_inputs, abs_outputs = baseline_utils.get_abs_traj(
-            _input.clone().cpu().numpy(),
-            decoder_outputs.detach().clone().cpu().numpy(),
-            args,
-            abs_helpers,
-        )
-
-        for i in range(abs_outputs.shape[0]):
-            seq_id = int(helpers_dict["SEQ_PATHS"][i])
-            forecasted_trajectories[seq_id] = [abs_outputs[i]]
-
-    with open(os.path.join(forecasted_save_dir, f"{start_idx}.pkl"),
-              "wb") as f:
-        pkl.dump(forecasted_trajectories, f)
-
-
-def infer_helper(
-        curr_data_dict: Dict[str, Any],
-        start_idx: int,
-        encoder: EncoderRNN,
-        decoder: DecoderRNN,
-        model_utils: ModelUtils,
-        forecasted_save_dir: str,
-):
-    """Run inference on the current joblib batch.
-
-    Args:
-        curr_data_dict: Data dictionary for the current joblib batch
-        start_idx: Start idx of the current joblib batch
-        encoder: Encoder network instance
-        decoder: Decoder network instance
-        model_utils: ModelUtils instance
-        forecasted_save_dir: Directory where forecasted trajectories are to be saved
-
-    """
-    args = parse_arguments()
-    curr_test_dataset = LSTMDataset(curr_data_dict, args, "test")
-    curr_test_loader = torch.utils.data.DataLoader(
-        curr_test_dataset,
-        shuffle=False,
-        batch_size=args.test_batch_size,
-        collate_fn=model_utils.my_collate_fn,
-    )
-
-    print(f"#### LSTM+social inference at {start_idx} ####"
-          ) if args.use_social else print(
-        f"#### LSTM inference at {start_idx} ####")
-    infer_absolute(
-        curr_test_loader,
-        encoder,
-        decoder,
-        start_idx,
-        forecasted_save_dir,
-        model_utils,
-    )
-'''
-
 
 class LSTMDataset(Dataset):
     """PyTorch Dataset for LSTM Baselines."""
@@ -762,14 +644,23 @@ class LSTMDataset(Dataset):
             wholetraj = np.load(f)
         
         print('wholetraj', wholetraj.shape)
+        '''
         print('normalizing')
         if args.rotation:
             normalized = baseline_utils.full_norm(wholetraj, args)
         else:
             normalized = baseline_utils.translation_norm(wholetraj) #.full_norm(wholetraj, args)#
+
+        new_path = data_path[:-4] + '_transi.npy'
+        with open(new_path, 'wb') as f:
+            np.save(f, normalized)
+        '''
+        normalized = wholetraj
         self.input_data = normalized[:, :args.obs_len, :]
         self.output_data = normalized[:, args.obs_len:, :]
         self.data_size = self.input_data.shape[0]
+        #print(self.input_data[:2])
+        #print(self.output_data[:2])
 
     def __len__(self):
         """Get length of dataset.
@@ -993,7 +884,7 @@ def main():
                 epoch += 1
 
                 #indent this out if test
-                if epoch % 5 == 0 or args.test:
+                if epoch % 2 == 0 or args.test:
                     start = time.time()
                     prev_loss, decrement_counter = validate(
                         val_loader,
@@ -1010,12 +901,13 @@ def main():
                         rollout_len,
                     )
                     end = time.time()
+                    print('decrement_counter',decrement_counter)
                     print(
                         f"Validation completed in {(end - start) / 60.0} mins, Total time: {(end - global_start_time) / 60.0} mins"
                     )
 
                     # If val loss increased 3 times consecutively, go to next rollout length
-                    if decrement_counter > 2 or args.test:
+                    if decrement_counter >= 2 or args.test:
                         break
 
         '''
@@ -1043,3 +935,138 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
+'''
+def infer_absolute(
+        test_loader: torch.utils.data.DataLoader,
+        encoder: EncoderRNN,
+        decoder: DecoderRNN,
+        start_idx: int,
+        forecasted_save_dir: str,
+        model_utils: ModelUtils,
+):
+    """Infer function for non-map LSTM baselines and save the forecasted trajectories.
+
+    Args:
+        test_loader: DataLoader for the test set
+        encoder: Encoder network instance
+        decoder: Decoder network instance
+        start_idx: start index for the current joblib batch
+        forecasted_save_dir: Directory where forecasted trajectories are to be saved
+        model_utils: ModelUtils instance
+
+    """
+    args = parse_arguments()
+    forecasted_trajectories = {}
+
+    for i, (_input, target, helpers) in enumerate(test_loader):
+
+        _input = _input.to(device)
+
+        batch_helpers = list(zip(*helpers))
+
+        helpers_dict = {}
+        for k, v in config.LSTM_HELPER_DICT_IDX.items():
+            helpers_dict[k] = batch_helpers[v]
+
+        # Set to eval mode
+        encoder.eval()
+        decoder.eval()
+
+        # Encoder
+        batch_size = _input.shape[0]
+        input_length = _input.shape[1]
+        input_shape = _input.shape[2]
+
+        # Initialize encoder hidden state
+        encoder_hidden = model_utils.init_hidden(
+            batch_size,
+            encoder.module.hidden_size if use_cuda else encoder.hidden_size)
+
+        # Encode observed trajectory
+        for ei in range(input_length):
+            encoder_input = _input[:, ei, :]
+            encoder_hidden = encoder(encoder_input, encoder_hidden)
+
+        # Initialize decoder input with last coordinate in encoder
+        decoder_input = encoder_input[:, :2]
+
+        # Initialize decoder hidden state as encoder hidden state
+        decoder_hidden = encoder_hidden
+
+        decoder_outputs = torch.zeros(
+            (batch_size, args.pred_len, 2)).to(device)
+
+        # Decode hidden state in future trajectory
+        for di in range(args.pred_len):
+            decoder_output, decoder_hidden = decoder(decoder_input,
+                                                     decoder_hidden)
+            decoder_outputs[:, di, :] = decoder_output
+
+            # Use own predictions as inputs at next step
+            decoder_input = decoder_output
+
+        # Get absolute trajectory
+        abs_helpers = {}
+        abs_helpers["REFERENCE"] = np.array(helpers_dict["DELTA_REFERENCE"])
+        abs_helpers["TRANSLATION"] = np.array(helpers_dict["TRANSLATION"])
+        abs_helpers["ROTATION"] = np.array(helpers_dict["ROTATION"])
+        abs_inputs, abs_outputs = baseline_utils.get_abs_traj(
+            _input.clone().cpu().numpy(),
+            decoder_outputs.detach().clone().cpu().numpy(),
+            args,
+            abs_helpers,
+        )
+
+        for i in range(abs_outputs.shape[0]):
+            seq_id = int(helpers_dict["SEQ_PATHS"][i])
+            forecasted_trajectories[seq_id] = [abs_outputs[i]]
+
+    with open(os.path.join(forecasted_save_dir, f"{start_idx}.pkl"),
+              "wb") as f:
+        pkl.dump(forecasted_trajectories, f)
+
+
+def infer_helper(
+        curr_data_dict: Dict[str, Any],
+        start_idx: int,
+        encoder: EncoderRNN,
+        decoder: DecoderRNN,
+        model_utils: ModelUtils,
+        forecasted_save_dir: str,
+):
+    """Run inference on the current joblib batch.
+
+    Args:
+        curr_data_dict: Data dictionary for the current joblib batch
+        start_idx: Start idx of the current joblib batch
+        encoder: Encoder network instance
+        decoder: Decoder network instance
+        model_utils: ModelUtils instance
+        forecasted_save_dir: Directory where forecasted trajectories are to be saved
+
+    """
+    args = parse_arguments()
+    curr_test_dataset = LSTMDataset(curr_data_dict, args, "test")
+    curr_test_loader = torch.utils.data.DataLoader(
+        curr_test_dataset,
+        shuffle=False,
+        batch_size=args.test_batch_size,
+        collate_fn=model_utils.my_collate_fn,
+    )
+
+    print(f"#### LSTM+social inference at {start_idx} ####"
+          ) if args.use_social else print(
+        f"#### LSTM inference at {start_idx} ####")
+    infer_absolute(
+        curr_test_loader,
+        encoder,
+        decoder,
+        start_idx,
+        forecasted_save_dir,
+        model_utils,
+    )
+'''

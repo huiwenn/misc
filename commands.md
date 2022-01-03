@@ -55,6 +55,10 @@ python scripts/lstm_train_test_nri.py --train_features ../nridata/train.pkl  --v
 python scripts/lstm_train_test_nri.py --train_features ../nridata/train10.pkl  --val_features ../nridata/val10.pkl --name nri10_lstm
 
 
+CUDA_VISIBLE_DEVICES=0 python scripts/lstm_train_test.py --train_features ../argoverse/agents_val_transi.npy  --val_features ../argoverse/agents_val_transi.npy --name lstm_argo_southtest
+
+CUDA_VISIBLE_DEVICES=0 python scripts/lstm_train_test_ped.py --train_features ../pedestrian/agents_train_transi.npy  --val_features ../pedestrian/agents_val_transi.npy --name lstm_ped_test
+
 ## ctscov
 python scripts/cstconv.py --dataset_path ../argoverse --rho-reg --batch_size 24 --batch_divide 8 --val_batch_size 3 --use_lane --train --model_name ctsconv_argo --batches_per_epoch 150 --val_batches 30 --loss nll --cuda_visible_devices 5,6,7
 

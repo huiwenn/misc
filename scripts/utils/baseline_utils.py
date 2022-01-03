@@ -537,7 +537,7 @@ def get_normalized_traj(df: pd.DataFrame, args: Any) -> np.ndarray:
     return normalize_traj_arr
 
 
-def translation_norm(df: np.array) -> np.ndarray:
+def translation_norm(df: np.array, zero_point=20) -> np.ndarray:
     """Normalize trajectory such that it starts at (0,0) and observed part ends on x-axis.
 
     Args:
@@ -562,7 +562,7 @@ def translation_norm(df: np.array) -> np.ndarray:
     for i in range(x_coord_seq.shape[0]):
         xy_seq = np.stack((x_coord_seq[i], y_coord_seq[i]), axis=-1)
 
-        start = xy_seq[0]
+        start = xy_seq[zero_point]
         # First apply translation
         m = [1, 0, 0, 1, -start[0], -start[1]]
         ls = LineString(xy_seq)

@@ -2,26 +2,19 @@
 import os
 import shutil
 import tempfile
-from glob import glob
-import pickle
-import os
 import time
 from typing import Any, Dict, List, Tuple, Union
 
 import argparse
 import joblib
-from tensorpack import dataflow
 from joblib import Parallel, delayed
 import tensorflow as tf
 from termcolor import cprint
 import numpy as np
+import pickle as pkl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import IterableDataset, DataLoader
-
-
-
 import utils.baseline_utils as baseline_utils
 from torch.utils.data import IterableDataset, Dataset
 
@@ -44,7 +37,7 @@ def parse_arguments() -> Any:
                         type=str,
                         help="path to the saved model")
     parser.add_argument("--obs_len",
-                        default=7,
+                        default=8,
                         type=int,
                         help="Observed length of the trajectory")
     parser.add_argument("--pred_len",
@@ -59,11 +52,6 @@ def parse_arguments() -> Any:
         "--rotation",
         action="store_true",
         help="rotationally normalize the trajectories if non-map baseline is used",
-    )
-    parser.add_argument(
-        "--normalize",
-        action="store_true",
-        help="translational normalize the trajectories if non-map baseline is used",
     )
     parser.add_argument(
         "--use_delta",
@@ -108,15 +96,15 @@ def parse_arguments() -> Any:
                         help="If true, only run the inference")
     parser.add_argument("--train_batch_size",
                         type=int,
-                        default=8,
+                        default=512, #512,
                         help="Training batch size")
     parser.add_argument("--val_batch_size",
                         type=int,
-                        default=8,
+                        default=512, #512,
                         help="Val batch size")
     parser.add_argument("--end_epoch",
                         type=int,
-                        default=1000,
+                        default=100,
                         help="Last epoch")
     parser.add_argument("--lr",
                         type=float,
@@ -133,6 +121,7 @@ def parse_arguments() -> Any:
 
 use_cuda = torch.cuda.is_available()
 if use_cuda:
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
     device = torch.device("cuda")
 else:
     device = torch.device("cpu")
@@ -140,7 +129,7 @@ global_step = 0
 best_loss = float("inf")
 np.random.seed(100)
 
-ROLLOUT_LENS = [1, 12]
+ROLLOUT_LENS = [1, 6, 12]
 
 class EncoderRNN(nn.Module):
     """Encoder Network."""
@@ -381,11 +370,12 @@ def train(
     """
     args = parse_arguments()
     global global_step
+    mse = nn.MSELoss()
 
-    for i, (_input, target, mask) in enumerate(train_loader):
-        _input = torch.tensor(np.concatenate(_input, axis=0), dtype=torch.float32, device=device)
-        target = torch.tensor(np.concatenate(target, axis=0), dtype=torch.float32, device=device)
-        mask = torch.tensor(np.concatenate(mask, axis=0), dtype=torch.float32, device=device)
+    batches = 0
+    for i, (_input, target, helpers) in enumerate(train_loader):
+        _input = _input.to(device)
+        target = target.to(device)
 
         # Set to train mode
         encoder.train()
@@ -432,8 +422,8 @@ def train(
             decoder_outputs[:, di, :] = output
 
             # Update loss
-            loss += criterion(output[:, :5], target[:, di, :2], mask=mask)
-            msel += euclidean_distance(output[:, :2], target[:, di, :2], mask=mask)
+            loss += criterion(output[:, :5], target[:, di, :2])
+            msel += mse(output[:, :2], target[:, di, :2])
             # Use own predictions as inputs at next step
             decoder_input = output
 
@@ -446,7 +436,7 @@ def train(
         encoder_optimizer.step()
         decoder_optimizer.step()
 
-        if global_step % 100 == 0:
+        if global_step % 1000 == 0:
 
             # Log results
             print(
@@ -456,9 +446,11 @@ def train(
                                   value=loss.item(),
                                   step=epoch)
 
-        if i>100:
-            break
         global_step += 1
+        
+        # TODO change back
+        #if i >=100:
+        #    break
 
 
 def validate(
@@ -497,13 +489,19 @@ def validate(
     total_loss = []
     ades = []
     fdes = np.array([])
+    nll = []
     mis = []
     cov = []
+    cov_1s = []
+    cov_2s = []
+    cov_3s = []
+    for i, (_input, target, helpers) in enumerate(val_loader):
+        # TODO: change back
+        if i >= 100:
+            break
 
-    for i, (_input, target, mask) in enumerate(val_loader):
-        _input = torch.tensor(np.concatenate(_input, axis=0), dtype=torch.float32, device=device)
-        target = torch.tensor(np.concatenate(target, axis=0), dtype=torch.float32, device=device)
-        mask =  torch.tensor(np.concatenate(mask, axis=0), dtype=torch.float32, device=device)
+        _input = _input.to(device)
+        target = target.to(device)
 
         # Set to eval mode
         encoder.eval()
@@ -540,46 +538,60 @@ def validate(
         de = []
         miss = []
         covv = []
-        for di in range(output_length):
+        nlls = []
+        for di in range(rollout_len):
             decoder_output, decoder_hidden = decoder(decoder_input,
                                                      decoder_hidden)
+
             output = Gaussian2d(decoder_output)
 
             decoder_outputs[:, di, :] = output
 
             # Update loss
-            loss += criterion(output[:, :5], target[:, di, :2], mask=mask)
+            #print('output', output[:, :2])
+            #print('target', target[:, di, :2])
+            loss += criterion(output[:, :5], target[:, di, :2])
 
             # Use own predictions as inputs at next step
             decoder_input = output
-            # *mask
             de.append(torch.sqrt((decoder_output[:, 0] - target[:, di, 0])**2 +
                                (decoder_output[:, 1] - target[:, di, 1])**2).detach().cpu().numpy())
+            #print('de',de)
+            nlls.append(nll_loss_2(output[:, :5], target[:, di, :2]).detach().cpu().numpy())
             miss.append(quantile_loss(output[:, :5], target[:, di, :2]).detach().cpu().numpy())
             covv.append(get_coverage(output[:, :5], target[:, di, :2]).detach().cpu().numpy())
             # Use own predictions as inputs at next step
-
+        
         # Get average loss for pred_len
-        loss = loss / output_length
+        loss = loss / rollout_len
         total_loss.append(loss)
-        #ade = np.mean(np.array(de))
-        ades.append(np.concatenate(de,axis=0))
+        ade = np.mean(np.array(de))
+        ades.append(ade)
         fde = de[-1]
+
         fdes = np.concatenate([fdes,fde])
+        if rollout_len>=output_length:
+            cov_1s = np.concatenate([cov_1s,covv[3]])
+            cov_2s = np.concatenate([cov_2s,covv[7]])
+            cov_3s = np.concatenate([cov_3s,covv[11]])
+        nll.append(np.mean(nlls))
         mis.append(np.mean(miss))
         cov.append(np.mean(covv))
-        if i > 30:
-            break
 
 
     # Save
     val_loss = sum(total_loss) / len(total_loss)
-    ade = np.mean(np.array(ades))
+    ade = sum(ades)/len(ades)
     fde = np.mean(fdes)
     mrs = np.mean(mis)
+    nll = np.mean(nll)
     cov = np.mean(cov)
+    cov1s = np.mean(cov_1s)
+    cov2s = np.mean(cov_2s)
+    cov3s = np.mean(cov_3s)
     cprint(
-        f"Val -- Epoch:{epoch}, loss:{val_loss}, ade:{ade}, fde:{fde}, mis:{mrs}, cov:{cov}, Rollout: {rollout_len}",
+        f"Val -- Epoch:{epoch}, loss:{val_loss}, ade:{ade}, fde:{fde}, mis:{mrs}, \
+        cov:{cov}, 1s:{cov1s}, 2s:{cov2s}, 3s:{cov3s}, nll:{nll}, Rollout: {rollout_len}",
         color="green",
     )
 
@@ -608,6 +620,325 @@ def validate(
         decrement_counter += 1
 
     return val_loss, decrement_counter
+
+
+class LSTMDataset(Dataset):
+    """PyTorch Dataset for LSTM Baselines."""
+    def __init__(self, data_path: str, args, shuffle=True):
+        """Initialize the Dataset.
+
+        Args:
+            data_dict: Dict containing all the data
+            args: Arguments passed to the baseline code
+            mode: train/val/test mode
+
+        """
+        '''
+        with open(data_path, 'rb') as f:
+            data_dict = pkl.load(f)
+
+        # Get input
+        wholetraj = np.concatenate([data_dict["input"],data_dict["output"]],axis=1)
+        '''
+        with open(data_path, 'rb') as f:
+            wholetraj = np.load(f)
+        
+        print('wholetraj', wholetraj.shape)
+        
+        '''
+        print('normalizing')
+        if args.rotation:
+            normalized = baseline_utils.full_norm(wholetraj, args)
+        else:
+            normalized = baseline_utils.translation_norm(wholetraj, zero_point=8) #.full_norm(wholetraj, args)#
+        
+        new_path = data_path[:-4] + '_transi.npy'
+        with open(new_path, 'wb') as f:
+            np.save(f, normalized)
+        '''
+        normalized = wholetraj
+        self.input_data = normalized[:, :args.obs_len, :]
+        self.output_data = normalized[:, args.obs_len:, :]
+        self.data_size = self.input_data.shape[0]
+        #print(self.input_data[:2])
+        #print(self.output_data[:2])
+
+    def __len__(self):
+        """Get length of dataset.
+
+        Returns:
+            Length of dataset
+
+        """
+        return self.data_size
+
+    def __getitem__(self, idx: int
+                    ) -> Tuple[torch.FloatTensor, Any, Dict[str, np.ndarray]]:
+        """Get the element at the given index.
+
+        Args:
+            idx: Query index
+
+        Returns:
+            A list containing input Tensor, Output Tensor (Empty if test) and viz helpers.
+
+        """
+        return (
+            torch.FloatTensor(self.input_data[idx]),
+            torch.FloatTensor(
+                self.output_data[idx])
+        )
+
+
+def nll_loss_2(pred: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
+    """Negative log loss for single-variate gaussian, can probably be faster"""
+    x_mean = pred[:, 0]
+    y_mean = pred[:, 1]
+    x_delta = x_mean - data[:, 0]
+    y_delta = y_mean - data[:, 1]
+    x_sigma = pred[:, 2]
+    y_sigma = pred[:, 3]
+    rho = pred[:, 4]
+
+    root_det_epsilon = torch.pow(1-torch.pow(rho,2), 0.5) * x_sigma * y_sigma
+
+    loss = torch.log(2*3.14159*root_det_epsilon) \
+           + 0.5 * torch.pow(root_det_epsilon, -2) \
+           * (torch.pow(x_sigma, 2) * torch.pow(y_delta, 2) \
+              + torch.pow(y_sigma, 2) * torch.pow(x_delta, 2) \
+              - 2 * rho * x_sigma * y_sigma * x_delta * y_delta)
+
+    return torch.mean(loss)
+
+
+def Gaussian2d(x: torch.Tensor) -> torch.Tensor :
+    """Computes the parameters of a bivariate 2D Gaussian."""
+    x_mean  = x[:, 0]
+    y_mean  = x[:, 1]
+    sigma_x = torch.exp(x[:, 2]) #not inverse, see if it works
+    sigma_y = torch.exp(x[:, 3]) #not inverse
+    rho     = torch.tanh(x[:, 4])
+    return torch.stack([x_mean, y_mean, sigma_x, sigma_y, rho], dim=1)
+
+
+def quantile_loss(pred: torch.Tensor, data: torch.Tensor, alpha=0.9):
+
+    x_mean = pred[:, 0]
+    y_mean = pred[:, 1]
+
+    x_delta = x_mean - data[:, 0]
+    y_delta = y_mean - data[:, 1]
+    x_sigma = pred[:, 2]
+    y_sigma = pred[:, 3]
+    rho = pred[:, 4]
+
+    ohr = torch.pow(1-torch.pow(rho, 2), 0.5)
+
+    root_det_epsilon = ohr * x_sigma * y_sigma
+
+    c_alpha = - 2 * np.log(1 - alpha)
+
+    c_ =  (torch.pow(x_sigma, 2) * torch.pow(y_delta, 2) \
+           + torch.pow(y_sigma, 2) * torch.pow(x_delta, 2) \
+           - 2 * rho * x_sigma * y_sigma * x_delta * y_delta) * torch.pow(root_det_epsilon, -2)#c prime
+
+
+    c_delta = c_ - c_alpha
+    c_delta = torch.where(c_delta > 0, c_delta, torch.zeros_like(c_delta))
+
+    mrs = root_det_epsilon * (c_alpha + c_delta/alpha)
+    return torch.mean(mrs)
+
+def get_coverage(pred: torch.Tensor, data: torch.Tensor, alpha=0.9):
+    x_mean = pred[:, 0]
+    y_mean = pred[:, 1]
+
+    x_delta = x_mean - data[:, 0]
+    y_delta = y_mean - data[:, 1]
+    x_sigma = pred[:, 2]
+    y_sigma = pred[:, 3]
+    rho = pred[:, 4]
+
+    ohr = torch.pow(1-torch.pow(rho, 2), 0.5)
+
+    root_det_epsilon = ohr * x_sigma * y_sigma
+
+    c_alpha = - 2 * np.log(1 - alpha)
+
+    c_ = (torch.pow(x_sigma, 2) * torch.pow(y_delta, 2) \
+           + torch.pow(y_sigma, 2) * torch.pow(x_delta, 2) \
+           - 2 * rho * x_sigma * y_sigma * x_delta * y_delta) * torch.pow(root_det_epsilon, -2)#c prime
+
+    c_delta = c_ - c_alpha
+    cover = torch.where(c_delta > 0, torch.ones(c_.shape, device=c_.device), torch.zeros(c_.shape, device=c_.device))
+    return cover
+
+def main():
+    """Main."""
+    args = parse_arguments()
+    global save_dir
+    save_dir = 'checkpoints/' + args.name
+    model_utils = ModelUtils()
+
+    print(f"Using all ({joblib.cpu_count()}) CPUs....")
+    if use_cuda:
+        print(f"Using all ({torch.cuda.device_count()}) GPUs...")
+
+    os.makedirs(save_dir, exist_ok=True)
+    # key for getting feature set
+    # Get features
+
+    baseline_key = "none"
+
+    # Get model
+    if args.mis_metric:
+        criterion = quantile_loss
+    else:
+        criterion = nll_loss_2
+
+    encoder = EncoderRNN(input_size=2)
+    decoder = DecoderRNN(output_size=5)
+    if use_cuda:
+        encoder = nn.DataParallel(encoder)
+        decoder = nn.DataParallel(decoder)
+    encoder.to(device)
+    decoder.to(device)
+
+    encoder_optimizer = torch.optim.Adam(encoder.parameters(), lr=args.lr)
+    decoder_optimizer = torch.optim.Adam(decoder.parameters(), lr=args.lr)
+
+    # If model_path provided, resume from saved checkpoint
+    if args.model_path is not None and os.path.isfile(args.model_path):
+        print('loading model')
+        epoch, rollout_len, _ = model_utils.load_checkpoint(
+            args.model_path, encoder, decoder, encoder_optimizer,
+            decoder_optimizer)
+        start_epoch = epoch + 1
+        if rollout_len<30:
+            start_rollout_idx = ROLLOUT_LENS.index(rollout_len) + 1
+        else:
+            start_rollout_idx = ROLLOUT_LENS.index(rollout_len)
+            print("start rollout index", start_rollout_idx)
+
+    else:
+        start_epoch = 0
+        start_rollout_idx = 0
+
+    # Tensorboard logger
+    log_dir = os.path.join(os.getcwd(), "lstm_logs", baseline_key)
+
+    # Get PyTorch Dataset
+    print('loading train dataset')
+    train_dataset = LSTMDataset(args.train_features, args)
+    print('loading val dataset')
+    val_dataset = LSTMDataset(args.val_features, args)
+
+    # Setting Dataloaders
+    train_loader = torch.utils.data.DataLoader(
+        train_dataset,
+        batch_size=args.train_batch_size,
+        shuffle=True,
+        drop_last=False,
+        collate_fn=model_utils.my_collate_fn,
+    )
+
+    val_loader = torch.utils.data.DataLoader(
+        val_dataset,
+        batch_size=args.val_batch_size,
+        drop_last=False,
+        shuffle=False,
+        collate_fn=model_utils.my_collate_fn,
+    )
+
+    print("Training begins ...")
+
+    decrement_counter = 0
+
+    epoch = start_epoch
+    global_start_time = time.time()
+    for i in range(start_rollout_idx, len(ROLLOUT_LENS)):
+        rollout_len = ROLLOUT_LENS[i]
+        logger = Logger(log_dir, name="{}".format(rollout_len))
+        best_loss = float("inf")
+        prev_loss = best_loss
+        if not args.test:
+            while epoch < args.end_epoch:
+                start = time.time()
+                train(
+                    train_loader,
+                    epoch,
+                    criterion,
+                    logger,
+                    encoder,
+                    decoder,
+                    encoder_optimizer,
+                    decoder_optimizer,
+                    model_utils,
+                    rollout_len,
+                )
+                end = time.time()
+
+                print(
+                    f"Training epoch completed in {(end - start) / 60.0} mins, Total time: {(end - global_start_time) / 60.0} mins"
+                )
+
+                epoch += 1
+
+                #indent this out if test
+                if epoch % 2 == 0 or args.test:
+                    start = time.time()
+                    prev_loss, decrement_counter = validate(
+                        val_loader,
+                        epoch,
+                        criterion,
+                        logger,
+                        encoder,
+                        decoder,
+                        encoder_optimizer,
+                        decoder_optimizer,
+                        model_utils,
+                        prev_loss,
+                        decrement_counter,
+                        rollout_len,
+                    )
+                    end = time.time()
+                    print('decrement_counter',decrement_counter)
+                    print(
+                        f"Validation completed in {(end - start) / 60.0} mins, Total time: {(end - global_start_time) / 60.0} mins"
+                    )
+
+                    # If val loss increased 3 times consecutively, go to next rollout length
+                    if decrement_counter >= 2 or args.test:
+                        break
+
+        '''
+        start_time = time.time()
+
+        temp_save_dir = tempfile.mkdtemp()
+
+        test_size = data_dict["test_input"].shape[0]
+        test_data_subsets = baseline_utils.get_test_data_dict_subset(
+            data_dict, args)
+
+        # test_batch_size should be lesser than joblib_batch_size
+        Parallel(n_jobs=-2, verbose=2)(
+            delayed(infer_helper)(test_data_subsets[i], i, encoder, decoder,
+                                  model_utils, temp_save_dir)
+            for i in range(0, test_size, args.joblib_batch_size))
+
+        baseline_utils.merge_saved_traj(temp_save_dir, args.traj_save_path)
+        shutil.rmtree(temp_save_dir)
+
+        end = time.time()
+        print(f"Test completed in {(end - start_time) / 60.0} mins")
+        print(f"Forecasted Trajectories saved at {args.traj_save_path}")
+        '''
+
+if __name__ == "__main__":
+    main()
+
+
+
 
 '''
 def infer_absolute(
@@ -740,297 +1071,3 @@ def infer_helper(
         model_utils,
     )
 '''
-
-
-class PedestrianLstm(dataflow.RNGDataFlow):
-    def __init__(self, data_path: str,  args, shuffle: bool=True, max_num=60):
-        super(PedestrianLstm, self).__init__()
-        self.data_path = data_path
-        self.shuffle = shuffle
-        self.max_num = max_num
-        self.args = args
-
-    def __iter__(self):
-        pkl_list = glob(os.path.join(self.data_path, '*'))
-        pkl_list.sort()
-        if self.shuffle:
-            self.rng.shuffle(pkl_list)
-
-        for pkl_path in pkl_list:
-            try:
-                with open(pkl_path, 'rb') as f:
-                    data = pickle.load(f)
-            except:
-                print('datareading error')
-                continue
-            if sum(data['man_mask']) > self.max_num:
-                continue
-            if 'pos12' not in data.keys():
-                continue
-            #l = int(sum(data['man_mask']))
-            pos = np.array([data['pos'+str(i)] for i in range(12)])
-            outputs = np.stack(pos,axis=1)[:self.max_num,:,:2]
-            inputs = data['pos_enc'][:self.max_num,:,:2]
-
-            wholetraj = np.concatenate([inputs,outputs],axis=1)
-            #print('normalizing')
-            if self.args.rotation:
-                normalized = baseline_utils.full_norm(wholetraj, self.args)
-            elif self.args.normalize:
-                normalized = baseline_utils.translation_norm(wholetraj)
-            else:
-                normalized = wholetraj
-
-            self.input_data = normalized[:, :self.args.obs_len, :]
-            self.output_data = normalized[:, self.args.obs_len:, :]
-            self.data_size = self.input_data.shape[0]
-            yield self.input_data, self.output_data, data['man_mask'][:self.max_num]
-
-
-def read_pkl_data_lstm(data_path:str, batch_size: int, args,
-                       shuffle: bool=False, repeat: bool=False, **kwargs):
-    df = PedestrianLstm(data_path=data_path, args=args, shuffle=shuffle, **kwargs)
-    if repeat:
-        df = dataflow.RepeatedData(df, -1)
-    df = dataflow.BatchData(df, batch_size=batch_size)#, use_list=True)
-    df.reset_state()
-    return df
-
-
-def nll_loss_2(pred: torch.Tensor, data: torch.Tensor, mask=1) -> torch.Tensor:
-    """Negative log loss for single-variate gaussian, can probably be faster"""
-    x_mean = pred[:, 0]
-    y_mean = pred[:, 1]
-    x_delta = x_mean - data[:, 0]
-    y_delta = y_mean - data[:, 1]
-    x_sigma = pred[:, 2]
-    y_sigma = pred[:, 3]
-    rho = pred[:, 4]
-
-    root_det_epsilon = torch.pow(1-torch.pow(rho,2), 0.5) * x_sigma * y_sigma
-
-    loss = torch.log(2*3.14159*root_det_epsilon) \
-           + 0.5 * torch.pow(root_det_epsilon, -2) \
-           * (torch.pow(x_sigma, 2) * torch.pow(y_delta, 2) \
-              + torch.pow(y_sigma, 2) * torch.pow(x_delta, 2) \
-              - 2 * rho * x_sigma * y_sigma * x_delta * y_delta)
-
-    loss = loss*mask
-    return torch.mean(loss)
-
-
-def Gaussian2d(x: torch.Tensor) -> torch.Tensor :
-    """Computes the parameters of a bivariate 2D Gaussian."""
-    x_mean  = x[:, 0]
-    y_mean  = x[:, 1]
-    sigma_x = torch.exp(x[:, 2]) #not inverse, see if it works
-    sigma_y = torch.exp(x[:, 3]) #not inverse
-    rho     = torch.tanh(x[:, 4])
-    return torch.stack([x_mean, y_mean, sigma_x, sigma_y, rho], dim=1)
-
-
-def euclidean_distance(a, b, epsilon=1e-9, mask=1):
-    return torch.mean(torch.sqrt(torch.sum((a - b)**2, axis=-1)*mask + epsilon)).detach().cpu()
-
-
-def quantile_loss(pred: torch.Tensor, data: torch.Tensor, alpha=0.9, mask=1):
-
-    x_mean = pred[:, 0]
-    y_mean = pred[:, 1]
-
-    x_delta = x_mean - data[:, 0]
-    y_delta = y_mean - data[:, 1]
-    x_sigma = pred[:, 2]
-    y_sigma = pred[:, 3]
-    rho = pred[:, 4]
-
-    ohr = torch.pow(1-torch.pow(rho, 2), 0.5)
-
-    root_det_epsilon = ohr * x_sigma * y_sigma
-
-    c_alpha = - 2 * np.log(1 - alpha)
-
-    c_ =  (torch.pow(x_sigma, 2) * torch.pow(y_delta, 2) \
-           + torch.pow(y_sigma, 2) * torch.pow(x_delta, 2) \
-           - 2 * rho * x_sigma * y_sigma * x_delta * y_delta) * torch.pow(root_det_epsilon, -2)#c prime
-
-
-    c_delta = c_ - c_alpha
-    c_delta = torch.where(c_delta > 0, c_delta, torch.zeros_like(c_delta))
-
-    mrs = root_det_epsilon * (c_alpha + c_delta/alpha)
-    mrs = mrs*mask
-    return torch.mean(mrs)
-
-
-def get_coverage(pred: torch.Tensor, data: torch.Tensor, alpha=0.9):
-    x_mean = pred[:, 0]
-    y_mean = pred[:, 1]
-
-    x_delta = x_mean - data[:, 0]
-    y_delta = y_mean - data[:, 1]
-    x_sigma = pred[:, 2]
-    y_sigma = pred[:, 3]
-    rho = pred[:, 4]
-
-    ohr = torch.pow(1-torch.pow(rho, 2), 0.5)
-
-    root_det_epsilon = ohr * x_sigma * y_sigma
-
-    c_alpha = - 2 * np.log(1 - alpha)
-
-    c_ = (torch.pow(x_sigma, 2) * torch.pow(y_delta, 2) \
-           + torch.pow(y_sigma, 2) * torch.pow(x_delta, 2) \
-           - 2 * rho * x_sigma * y_sigma * x_delta * y_delta) * torch.pow(root_det_epsilon, -2)#c prime
-
-    c_delta = c_ - c_alpha
-    cover = torch.where(c_delta > 0, torch.ones(c_.shape, device=c_.device), torch.zeros(c_.shape, device=c_.device))
-    return cover
-
-
-
-
-def main():
-    """Main."""
-    args = parse_arguments()
-    global save_dir
-    save_dir = 'checkpoints/' + args.name
-    model_utils = ModelUtils()
-
-    print(f"Using all ({joblib.cpu_count()}) CPUs....")
-    if use_cuda:
-        print(f"Using all ({torch.cuda.device_count()}) GPUs...")
-
-    os.makedirs(save_dir, exist_ok=True)
-    # key for getting feature set
-    # Get features
-
-    baseline_key = "none"
-
-    # Get model
-    if args.mis_metric:
-        criterion = quantile_loss
-    else:
-        criterion = nll_loss_2
-
-    encoder = EncoderRNN(input_size=2)
-    decoder = DecoderRNN(output_size=5)
-    if use_cuda:
-        encoder = nn.DataParallel(encoder)
-        decoder = nn.DataParallel(decoder)
-    encoder.to(device)
-    decoder.to(device)
-
-    encoder_optimizer = torch.optim.Adam(encoder.parameters(), lr=args.lr)
-    decoder_optimizer = torch.optim.Adam(decoder.parameters(), lr=args.lr)
-
-    # If model_path provided, resume from saved checkpoint
-    if args.model_path is not None and os.path.isfile(args.model_path):
-        print('loading model')
-        epoch, rollout_len, _ = model_utils.load_checkpoint(
-            args.model_path, encoder, decoder, encoder_optimizer,
-            decoder_optimizer)
-        start_epoch = epoch + 1
-        start_rollout_idx = 1
-
-    else:
-        start_epoch = 0
-        start_rollout_idx = 0
-
-    if not args.test:
-
-        # Tensorboard logger
-        log_dir = os.path.join(os.getcwd(), "lstm_logs", baseline_key)
-
-        # Get PyTorch Dataset
-        print('loading train dataset')
-
-        train_loader = read_pkl_data_lstm(args.train_features, batch_size=args.train_batch_size,
-                                          args=args, repeat=True, shuffle=True)
-        print('loading val dataset')
-        val_loader = read_pkl_data_lstm(args.val_features, batch_size=args.val_batch_size, args=args)
-
-
-        print("Training begins ...")
-
-        decrement_counter = 0
-
-        epoch = start_epoch
-        global_start_time = time.time()
-        for i in range(start_rollout_idx, len(ROLLOUT_LENS)):
-            rollout_len = ROLLOUT_LENS[i]
-            logger = Logger(log_dir, name="{}".format(rollout_len))
-            best_loss = float("inf")
-            prev_loss = best_loss
-            while epoch < args.end_epoch:
-                start = time.time()
-                train(
-                    train_loader,
-                    epoch,
-                    criterion,
-                    logger,
-                    encoder,
-                    decoder,
-                    encoder_optimizer,
-                    decoder_optimizer,
-                    model_utils,
-                    rollout_len,
-                )
-                end = time.time()
-
-                print(
-                    f"Training epoch completed in {(end - start) / 60.0} mins, Total time: {(end - global_start_time) / 60.0} mins"
-                )
-
-                epoch += 1
-                if epoch % 1 == 0:
-                    start = time.time()
-                    prev_loss, decrement_counter = validate(
-                        val_loader,
-                        epoch,
-                        criterion,
-                        logger,
-                        encoder,
-                        decoder,
-                        encoder_optimizer,
-                        decoder_optimizer,
-                        model_utils,
-                        prev_loss,
-                        decrement_counter,
-                        rollout_len,
-                    )
-                    end = time.time()
-                    print(
-                        f"Validation completed in {(end - start) / 60.0} mins, Total time: {(end - global_start_time) / 60.0} mins"
-                    )
-
-                    # If val loss increased 3 times consecutively, go to next rollout length
-                    if decrement_counter > 2:
-                        break
-
-        '''
-        start_time = time.time()
-
-        temp_save_dir = tempfile.mkdtemp()
-
-        test_size = data_dict["test_input"].shape[0]
-        test_data_subsets = baseline_utils.get_test_data_dict_subset(
-            data_dict, args)
-
-        # test_batch_size should be lesser than joblib_batch_size
-        Parallel(n_jobs=-2, verbose=2)(
-            delayed(infer_helper)(test_data_subsets[i], i, encoder, decoder,
-                                  model_utils, temp_save_dir)
-            for i in range(0, test_size, args.joblib_batch_size))
-
-        baseline_utils.merge_saved_traj(temp_save_dir, args.traj_save_path)
-        shutil.rmtree(temp_save_dir)
-
-        end = time.time()
-        print(f"Test completed in {(end - start_time) / 60.0} mins")
-        print(f"Forecasted Trajectories saved at {args.traj_save_path}")
-        '''
-
-
-if __name__ == "__main__":
-    main()
