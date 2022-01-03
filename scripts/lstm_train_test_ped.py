@@ -54,6 +54,11 @@ def parse_arguments() -> Any:
         help="rotationally normalize the trajectories if non-map baseline is used",
     )
     parser.add_argument(
+        "--normalize",
+        action="store_true",
+        help="rotationally normalize the trajectories if non-map baseline is used",
+    )
+    parser.add_argument(
         "--use_delta",
         action="store_true",
         help="Train on the change in position, instead of absolute position",

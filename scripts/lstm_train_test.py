@@ -49,6 +49,11 @@ def parse_arguments() -> Any:
                         type=str,
                         help="model name")
     parser.add_argument(
+        "--normalize",
+        action="store_true",
+        help="rotationally normalize the trajectories if non-map baseline is used",
+    )
+    parser.add_argument(
         "--rotation",
         action="store_true",
         help="rotationally normalize the trajectories if non-map baseline is used",
@@ -89,6 +94,9 @@ def parse_arguments() -> Any:
                         action="store_true",
                         help="Use social features")
     parser.add_argument("--mis_metric",
+                        action="store_true",
+                        help="Use social features")
+    parser.add_argument("--full_nll",
                         action="store_true",
                         help="Use social features")
     parser.add_argument("--test",
@@ -650,14 +658,15 @@ class LSTMDataset(Dataset):
         if args.rotation:
             normalized = baseline_utils.full_norm(wholetraj, args)
             new_path = data_path[:-4] + '_rotation.npy'
-        else:
+        elif args.translation:
             normalized = baseline_utils.translation_norm(wholetraj) #.full_norm(wholetraj, args)#
-            new_path = data_path[:-4] + '_rotation.npy'
-    
+            new_path = data_path[:-4] + '_transi.npy'
+        else:
+            normalized = wholetraj
+
         with open(new_path, 'wb') as f:
             np.save(f, normalized)
     
-        #normalized = wholetraj
         self.input_data = normalized[:, :args.obs_len, :]
         self.output_data = normalized[:, args.obs_len:, :]
         self.data_size = self.input_data.shape[0]
@@ -692,7 +701,7 @@ class LSTMDataset(Dataset):
 
 
 
-def nll_loss_2( pred: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
+def nll_loss( pred: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
     loss = 0
 
     for i, x in enumerate(data):
@@ -709,7 +718,7 @@ def nll_loss_2( pred: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
         
     return loss/data.shape[0]
 
-def nll_loss_1(pred: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
+def nll_loss_2(pred: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
     """Negative log loss for single-variate gaussian, can probably be faster"""
     x_mean = pred[:, 0]
     y_mean = pred[:, 1]
@@ -812,6 +821,8 @@ def main():
     # Get model
     if args.mis_metric:
         criterion = quantile_loss
+    elif args.full_nll:
+        criterion = nll_loss
     else:
         criterion = nll_loss_2
 
