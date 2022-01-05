@@ -51,7 +51,7 @@ def parse_arguments() -> Any:
     parser.add_argument(
         "--translation",
         action="store_true",
-        help="rotationally normalize the trajectories if non-map baseline is used",
+        help="translation normalize the trajectories if non-map baseline is used",
     )
     parser.add_argument(
         "--rotation",
@@ -889,6 +889,7 @@ def main():
 
     epoch = start_epoch
     global_start_time = time.time()
+    
     for i in range(start_rollout_idx, len(ROLLOUT_LENS)):
         rollout_len = ROLLOUT_LENS[i]
         logger = Logger(log_dir, name="{}".format(rollout_len))
@@ -897,7 +898,6 @@ def main():
         rollout_epoch = 0
         if not args.test:
             while epoch < args.end_epoch:
-
                 rollout_epoch+=1
                 if rollout_epoch > 100:
                     break
@@ -946,16 +946,8 @@ def main():
                     )
 
                     # If val loss increased 3 times consecutively, go to next rollout length
-                    if decrement_counter > 2 or args.test:
+                    if decrement_counter > 2:
                         break
-
-
-
-
-
-
-
-
         
         if args.test:
             start = time.time()
@@ -979,8 +971,7 @@ def main():
                 f"Validation completed in {(end - start) / 60.0} mins, Total time: {(end - global_start_time) / 60.0} mins"
             )
         
-        if decrement_counter > 2:
-            break
+
         '''
         start_time = time.time()
 
