@@ -41,7 +41,7 @@ def mis_loss(pr_pos, gt_pos, pred_m, car_mask=None, rho = 0.9, scale=1 ,sigma_re
         sigma = calc_sigma(pred_m)
     c_alpha = - 2 * torch.log(torch.tensor(1.0)-rho)
     det = torch.det(sigma)
-    c_ =  quadratic_func(gt_pos - pr_pos, sigma.inverse()) / det #c prime
+    c_ =  quadratic_func(gt_pos[...,:2] - pr_pos[...,:2], sigma.inverse()) / det #c prime
 
     c_delta = c_ - c_alpha
     c_delta = torch.where(c_delta > torch.tensor(0, device=c_delta.device), c_delta, torch.zeros(c_delta.shape, device=c_delta.device))
