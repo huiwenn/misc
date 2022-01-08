@@ -2,12 +2,12 @@
 import os
 import sys
 sys.path.append('..')
+sys.path.append('.')
 from collections import namedtuple
 import time
 import pickle
 import argparse
 import datetime
-from ped_evaluate_cstconv import evaluate
 from datasets.pedestrian_pkl_loader import read_pkl_data
 from train_utils import *
 
@@ -25,18 +25,18 @@ parser.add_argument('--dataset_path', default='/path/to/argoverse_forecasting/',
                     help='path to dataset folder, which contains train and val folders')
 parser.add_argument('--train_window', default=6, type=int, help='how many timestamps to iterate in training')
 parser.add_argument('--val_window', default=12, type=int, help='how many timestamps to iterate in validation')
-parser.add_argument('--batch_divide', default=1, type=int, 
+parser.add_argument('--batch_divide', default=4, type=int, 
                     help='divide one batch into several packs, and train them iterativelly.')
 parser.add_argument('--epochs', default=200, type=int)
 parser.add_argument('--batches_per_epoch', default=600, type=int, 
                     help='determine the number of batches to train in one epoch')
 parser.add_argument('--base_lr', default=0.001, type=float)
-parser.add_argument('--batch_size', default=1, type=int)
-parser.add_argument('--model_name', default='ecco_trained_model', type=str)
+parser.add_argument('--batch_size', default=16, type=int)
+parser.add_argument('--model_name', default='cstconv_ped', type=str)
 parser.add_argument('--use_lane', default=False, action='store_true')
-parser.add_argument('--val_batches', default=600, type=int,
+parser.add_argument('--val_batches', default=80, type=int,
                     help='the number of batches of data to split as validation set')
-parser.add_argument('--val_batch_size', default=1, type=int)
+parser.add_argument('--val_batch_size', default=4, type=int)
 parser.add_argument('--train', default=False, action='store_true')
 parser.add_argument('--evaluation', default=False, action='store_true')
 parser.add_argument('--load_model_path', default='', type=str, help='path to model to be loaded')
@@ -112,17 +112,8 @@ def train():
 
     def train_one_batch(model, batch, loss_f, train_window=2):
 
-        pos_zero = torch.unsqueeze(torch.zeros(batch['pos0'].shape[:-1], device=device),-1)
-        batch['pos0'] = torch.cat([batch['pos0'], pos_zero], dim = -1)
-        batch['vel0'] = torch.cat([batch['vel0'], pos_zero], dim = -1)
-
-        batch['accel'] = torch.cat([batch['accel'], torch.zeros(batch['accel'].shape[:-1],device=device).unsqueeze(-1)], dim = -1)
-        zero_2s = torch.unsqueeze(torch.zeros(batch['vel_enc'].shape[:-1], device=device),-1)
-        batch['vel_enc'] = torch.cat([batch['vel_enc'], zero_2s], dim = -1)
-        batch['pos_enc'] = torch.cat([batch['pos_enc'], zero_2s], dim = -1)
-
         #m0 = torch.zeros((batch['pos_enc'].shape[0], 60, 2, 2), device=device)
-        m0 = -5*torch.eye(2, device=device).reshape((1,2,2)).repeat((batch_size//args.batch_divide, batch['pos0'].shape[1], 1, 1))
+        m0 = -5*torch.eye(2, device=device).reshape((1,2,2)).repeat((args.batch_size//args.batch_divide, batch['pos0'].shape[1], 1, 1))
         inputs = ([
             batch['pos_enc'], batch['vel_enc'],
             batch['pos0'], batch['vel0'],
@@ -165,16 +156,7 @@ def train():
     valid_losses = []
     valid_metrics_list = []
     min_loss = None
-    '''
-    with torch.profiler.profile(schedule=torch.profiler.schedule(
-            wait=2,
-            warmup=2,
-            active=6,
-            repeat=1),
-        on_trace_ready=torch.profiler.tensorboard_trace_handler(log_dir),
-        with_stack=True
-    ) as profiler:
-    '''
+
     for i in range(epochs):
         print("training ... epoch " + str(i + 1), end='', flush=True)
         epoch_start_time = time.time()
@@ -284,6 +266,164 @@ def evaluation():
         pickle.dump(valid_metrics, f)
         
         
+def evaluate(model, val_dataset, loss_f, use_lane=False,
+             train_window=3, max_iter=2500, device='cpu', start_iter=0, 
+             batch_size=32):
+    
+    print('evaluating.. ', end='', flush=True)
+        
+    count = 0
+    prediction_gt = {}
+    losses = 0
+
+    for i, sample in enumerate(val_dataset):
+
+        
+        if i >= max_iter:
+            break
+        
+        if i < start_iter:
+            continue
+        
+        pred = []
+        gt = []
+        sigmas = []
+
+        if count % 1 == 0:
+            print('{}'.format(count + 1), end=' ', flush=True)
+        
+        count += 1
+
+        batch = process_batch_ped(sample, device)
+        del sample
+
+        m0 = -5*torch.eye(2, device=device).reshape((1,2,2)).repeat((args.batch_size//args.batch_divide, batch['pos0'].shape[1], 1, 1))
+
+        inputs = ([
+            batch['pos_enc'], batch['vel_enc'],
+            batch['pos0'], batch['vel0'],
+            batch['accel'], m0,
+            batch['man_mask']
+        ])
+
+        pr_pos1, pr_vel1, pr_m1, states = model(inputs)
+        gt_pos1 = batch['pos1']
+
+        losses = loss_f(pr_pos1, gt_pos1, pr_m1, batch['man_mask'].squeeze(-1))
+
+        pr_agent, gt_agent, sigma_agent = pr_pos1[:,0], gt_pos1[:,0], pr_m1[:,0]
+
+        sigmas.append(sigma_agent.unsqueeze(1).detach().cpu())
+        pred.append(pr_agent.unsqueeze(1).detach().cpu())
+        gt.append(gt_agent.unsqueeze(1).detach().cpu())
+        del pr_agent, gt_agent
+        clean_cache(device)
+
+        pos0 = batch['pos0']
+        vel0 = batch['vel0']
+        for j in range(train_window-1):
+            pos_enc = torch.unsqueeze(pos0, 2)
+            vel_enc = torch.unsqueeze(vel0, 2)
+            accel = pr_vel1 - vel_enc[...,-1,:]
+
+            inputs = (pos_enc, vel_enc, pr_pos1, pr_vel1, accel,
+                      pr_m1,
+                      batch['man_mask'])
+
+            pos0, vel0, m0 = pr_pos1, pr_vel1, pr_m1
+
+            pr_pos1, pr_vel1, pr_m1, states = model(inputs, states)
+            clean_cache(device)
+
+            gt_pos1 = batch['pos'+str(j+2)]
+
+            losses += loss_f(pr_pos1, gt_pos1, pr_m1, batch['man_mask'].squeeze(-1))
+
+            pr_agent, gt_agent, sigma_agent = pr_pos1[:,0], gt_pos1[:,0], pr_m1[:,0]
+
+            sigmas.append(sigma_agent.unsqueeze(1).detach().cpu())
+            pred.append(pr_agent.unsqueeze(1).detach().cpu())
+            gt.append(gt_agent.unsqueeze(1).detach().cpu())
+
+        clean_cache(device)
+
+        predict_result = (torch.cat(pred, axis=1), torch.cat(gt, axis=1), torch.cat(sigmas,axis=1))
+
+        scenes = batch['scene_idx'].tolist()
+
+        for idx, scene_id in enumerate(scenes):
+            prediction_gt[scene_id] = (predict_result[0][idx], predict_result[1][idx], predict_result[2][idx])
+
+    total_loss = torch.sum(losses,axis=0) / (train_window)
+
+
+    result = {}
+    de = {}
+    coverage = {}
+    mis = {}
+
+    for k, v in prediction_gt.items():
+        de[k] = torch.sqrt((v[0][:,0] - v[1][:,0])**2 +
+                           (v[0][:,1] - v[1][:,1])**2)
+        coverage[k] = get_coverage(v[0][:,:2], v[1], v[2])
+        mis[k] = mis_loss(v[0][:,:2], v[1], v[2])
+
+    ade = []
+    for k, v in de.items():
+        ade.append(np.mean(v.numpy()))
+
+    acoverage = []
+    for k, v in coverage.items():
+        acoverage.append(np.mean(v.numpy()))
+
+    amis = []
+    for k, v in mis.items():
+        amis.append(np.mean(v.numpy()))
+
+    result['loss'] = total_loss.detach().cpu().numpy()
+    result['ADE'] = np.mean(ade)
+    result['ADE_std'] = np.std(ade)
+    result['coverage'] = np.mean(acoverage)
+    result['mis'] = np.mean(amis)
+
+    fdes = []
+    for k, v in de.items():
+        fdes.append(v.numpy()[-1])
+    result['FDE'] = np.mean(fdes)
+
+
+    if train_window >= 29:
+        de1s = []
+        de2s = []
+        de3s = []
+        cov1s = []
+        cov2s = []
+        cov3s = []
+        for k, v in de.items():
+            de1s.append(v.numpy()[10])
+            de2s.append(v.numpy()[20])
+            de3s.append(v.numpy()[-1])
+        for k,v in coverage.items():
+            cov1s.append(np.mean(v[:4].numpy()))
+            cov2s.append(np.mean(v[4:8].numpy()))
+            cov3s.append(np.mean(v[8:].numpy()))
+
+        result['DE@1s'] = np.mean(de1s)
+        result['DE@1s_std'] = np.std(de1s)
+        result['DE@2s'] = np.mean(de2s)
+        result['DE@2s_std'] = np.std(de2s)
+        result['DE@3s'] = np.mean(de3s)
+        result['DE@3s_std'] = np.std(de3s)
+        result['cov@1s'] = np.mean(cov1s)
+        result['cov@2s'] = np.mean(cov2s)
+        result['cov@3s'] = np.mean(cov3s)
+
+    print(result)
+    print('done')
+
+    return total_loss, prediction_gt
+
+
 if __name__ == '__main__':
     if args.train:
         # debug 大法好

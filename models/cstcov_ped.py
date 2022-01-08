@@ -164,9 +164,14 @@ class ParticlesNetwork(nn.Module):
                 feats = torch.cat((other_feats, states[0][...,3:], v0_enc.reshape(*v0_enc.shape[:2], -1)), -1)
                 #print('feats',feats.shape)
 
-        # print(feats.shape)
-
+        # print('p0',p0.shape)
+        # print('v0', v0.shape)
+        # print('a', a.shape)
         p1, v1 = self.update_pos_vel(p0, v0, a)
+        # print('p1',p1.shape)
+        # print('v1', v1.shape)
+        # print('feats',feats.shape)
+        # print('mask', fluid_mask.shape)
         pos_correction = self.compute_correction(p1, v1, feats, fluid_mask)
         pc = torch.cat([pos_correction[...,:2], torch.zeros(*pos_correction.shape[:-1], 1, device=p1.device)], -1)
         p_corrected, v_corrected = self.apply_correction(p0, p1, pc)

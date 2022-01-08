@@ -69,14 +69,14 @@ def calc_sigma(M):
     sigma_scaled = 0.5*sigma
     return sigma_scaled
 
-def nll(pr_pos, gt_pos, pred_m, car_mask):
+def nll(pr_pos, gt_pos, pred_m, car_mask=1):
     sigma = calc_sigma(pred_m)
 
     loss = 0.5 * quadratic_func(gt_pos - pr_pos[...,:2], sigma.inverse()) \
         + torch.log(2 * 3.1416 * torch.pow(sigma.det(), 0.5))
     return torch.mean(loss * car_mask)
 
-def nll_dyna(pr_pos, gt_pos, sigma, car_mask):
+def nll_dyna(pr_pos, gt_pos, sigma, car_mask=1):
     loss = 0.5 * quadratic_func(gt_pos - pr_pos[...,:2], sigma.inverse()) \
         + torch.log(2 * 3.1416 * torch.pow(sigma.det(), 0.5))
     return torch.mean(loss * car_mask)
@@ -172,3 +172,31 @@ def process_batch(batch, device, train_window = 30):
     #batch_tensor
     return batch_tensor
 
+
+def process_batch_ped(batch, device, train_window = 12, train_particle_num=60):
+    batch_tensor = {}
+
+    batch_tensor['man_mask'] = torch.tensor(np.stack(batch['man_mask'])[:,:train_particle_num],
+                                    dtype=torch.float32, device=device).unsqueeze(-1)
+
+    convert_keys = (['pos' + str(i) for i in range(train_window + 1)] + 
+                    ['vel' + str(i) for i in range(train_window + 1)] + 
+                    ['pos_enc', 'vel_enc'])
+    batch_tensor['scene_idx'] = np.stack(batch['scene_idx'])
+        
+    for k in convert_keys:
+        batch_tensor[k] = torch.tensor(np.stack(batch[k])[:,:train_particle_num],#[...,:2],
+                                        dtype=torch.float32, device=device)
+
+    pos_zero = torch.unsqueeze(torch.zeros(batch_tensor['pos0'].shape[:-1], device=device),-1)
+    batch_tensor['pos0'] = torch.cat([batch_tensor['pos0'], pos_zero], dim = -1)
+    batch_tensor['vel0'] = torch.cat([batch_tensor['vel0'], pos_zero], dim = -1)
+
+    zero_2s = torch.unsqueeze(torch.zeros(batch_tensor['vel_enc'].shape[:-1], device=device),-1)
+    batch_tensor['vel_enc'] = torch.cat([batch_tensor['vel_enc'], zero_2s], dim = -1)
+    batch_tensor['pos_enc'] = torch.cat([batch_tensor['pos_enc'], zero_2s], dim = -1)
+
+    accel = batch_tensor['vel0'] - batch_tensor['vel_enc'][...,-1,:]
+    # accel = torch.zeros(batch_size, 1, 2).to(device)
+    batch_tensor['accel'] = accel
+    return batch_tensor
