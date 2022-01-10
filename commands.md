@@ -68,11 +68,16 @@ CUDA_VISIBLE_DEVICES=0 python scripts/lstm_train_test_ped.py --train_features ..
 
 CUDA_VISIBLE_DEVICES=4 python scripts/lstm_train_test_ped.py --train_features ../pedestrian/agents_train_transi.npy  --val_features ../pedestrian/agents_val_transi.npy --name lstm_ped_mis --mis_metric
 
+## ecco
+
+python scripts/ecco.py --dataset_path ../argoverse --rho-reg --model_name rho_reg_ecco --train 
+
 ## ctscov
 python scripts/cstconv.py --dataset_path ../argoverse --rho-reg --batch_size 24 --batch_divide 8 --val_batch_size 3 --use_lane --train --model_name ctsconv_argo --batches_per_epoch 150 --val_batches 30 --loss nll --cuda_visible_devices 5,6,7
 
 python scripts/cstconv.py --dataset_path ../argoverse --rho-reg --batch_size 1 --batch_divide 1 --val_batch_size 3 --use_lane --train --model_name ctsconv_argo --batches_per_epoch 1 --val_batches 30 --loss nll --cuda_visible_devices 5,6,7
 
+python scripts/cstconv.py --dataset_path ../argoverse --rho-reg --batch_size 24 --batch_divide 8 --val_batch_size 3 --use_lane --train --model_name ctsconv_argo --batches_per_epoch 150 --val_batches 40 --rotate --loss nll --cuda_visible_devices 3,6,7 
 models:
 
 ## argoverse

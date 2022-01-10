@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import sys
+sys.path.append('.')
 sys.path.append('..')
 from collections import namedtuple
 import time
