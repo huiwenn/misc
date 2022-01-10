@@ -86,7 +86,7 @@ def train():
 
     print('loading tain dataset')
     dataset = read_pkl_data(train_path, batch_size=args.batch_size / args.batch_divide,
-                            repeat=True, shuffle=True, max_lane_nodes=900, rotate=rotate)
+                            repeat=True, shuffle=True, max_lane_nodes=900, rotate=args.rotate)
 
     data_iter = iter(dataset)
 
