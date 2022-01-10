@@ -23,12 +23,12 @@ parser = argparse.ArgumentParser(description="Training setting and hyperparamete
 parser.add_argument('--cuda_visible_devices', default='0,1,2,3')
 parser.add_argument('--dataset_path', default='/path/to/argoverse_forecasting/', 
                     help='path to dataset folder, which contains train and val folders')
-parser.add_argument('--train_window', default=6, type=int, help='how many timestamps to iterate in training')
+parser.add_argument('--train_window', default=5, type=int, help='how many timestamps to iterate in training')
 parser.add_argument('--val_window', default=12, type=int, help='how many timestamps to iterate in validation')
 parser.add_argument('--batch_divide', default=4, type=int, 
                     help='divide one batch into several packs, and train them iterativelly.')
 parser.add_argument('--epochs', default=200, type=int)
-parser.add_argument('--batches_per_epoch', default=600, type=int, 
+parser.add_argument('--batches_per_epoch', default=400, type=int, 
                     help='determine the number of batches to train in one epoch')
 parser.add_argument('--base_lr', default=0.001, type=float)
 parser.add_argument('--batch_size', default=16, type=int)
@@ -392,7 +392,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     result['FDE'] = np.mean(fdes)
 
 
-    if train_window >= 29:
+    if train_window >= 11:
         de1s = []
         de2s = []
         de3s = []
@@ -400,8 +400,8 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         cov2s = []
         cov3s = []
         for k, v in de.items():
-            de1s.append(v.numpy()[10])
-            de2s.append(v.numpy()[20])
+            de1s.append(v.numpy()[3])
+            de2s.append(v.numpy()[8])
             de3s.append(v.numpy()[-1])
         for k,v in coverage.items():
             cov1s.append(np.mean(v[:4].numpy()))

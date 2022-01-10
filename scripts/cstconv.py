@@ -40,7 +40,7 @@ parser.add_argument('--train', default=False, action='store_true')
 parser.add_argument('--evaluation', default=False, action='store_true')
 parser.add_argument('--load_model_path', default='', type=str, help='path to model to be loaded')
 parser.add_argument('--loss', default='nll', type=str, help='nll or ecco loss')
-
+parser.add_argument('--rotate', default=False, action='store_true')
 
 
 feature_parser = parser.add_mutually_exclusive_group(required=False)
@@ -85,7 +85,7 @@ def train():
 
     print('loading tain dataset')
     dataset = read_pkl_data(train_path, batch_size=args.batch_size / args.batch_divide,
-                            repeat=True, shuffle=True, max_lane_nodes=900)
+                            repeat=True, shuffle=True, max_lane_nodes=900, rotate=rotate)
 
     data_iter = iter(dataset)
 
@@ -437,7 +437,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
                         (v[0][:,1] - v[1][:,1])**2)
         coverage[k] = get_coverage(v[0][:,:2], v[1], v[0][:,3:].reshape(train_window,2,2)) #pr_pos, gt_pos, pred_m, car_mask)
         mis[k] = mis_loss(v[0][:,:2], v[1],v[0][:,3:].reshape(train_window,2,2))
-        nll[k] = nll(v[0][:,:2], v[1],v[0][:,3:].reshape(train_window,2,2)))
+        nll[k] = nll(v[0][:,:2], v[1],v[0][:,3:].reshape(train_window,2,2))
 
 
     ade = []

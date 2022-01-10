@@ -200,3 +200,28 @@ def process_batch_ped(batch, device, train_window = 12, train_particle_num=60):
     # accel = torch.zeros(batch_size, 1, 2).to(device)
     batch_tensor['accel'] = accel
     return batch_tensor
+
+
+def process_batch_ped_2d(batch, device, train_window = 12, train_particle_num=60):
+    batch_tensor = {}
+
+    batch_tensor['man_mask'] = torch.tensor(np.stack(batch['man_mask'])[:,:train_particle_num],
+                                    dtype=torch.float32, device=device).unsqueeze(-1)
+
+    convert_keys = (['pos' + str(i) for i in range(train_window + 1)] + 
+                    ['vel' + str(i) for i in range(train_window + 1)] + 
+                    ['pos_enc', 'vel_enc'])
+    batch_tensor['scene_idx'] = np.stack(batch['scene_idx'])
+        
+    for k in convert_keys:
+        batch_tensor[k] = torch.tensor(np.stack(batch[k])[:,:train_particle_num][...,:2],
+                                        dtype=torch.float32, device=device)
+
+    pos_zero = torch.unsqueeze(torch.zeros(batch_tensor['pos0'].shape[:-1], device=device),-1)
+
+    zero_2s = torch.unsqueeze(torch.zeros(batch_tensor['vel_enc'].shape[:-1], device=device),-1)
+
+    accel = batch_tensor['vel0'] - batch_tensor['vel_enc'][...,-1,:]
+    # accel = torch.zeros(batch_size, 1, 2).to(device)
+    batch_tensor['accel'] = accel
+    return batch_tensor
