@@ -48,7 +48,13 @@ class ArgoverseDataset(IterableDataset):
             data['lane_norm'] = [self.expand_particle(data['lane_norm'][...,:2], self.max_lane_nodes, 0)]
 
             if self.rotate:
-                data = rotate(data)
+                theta = (np.random.rand(1) * 2 * np.pi)[0]
+                convert_keys = (['pos' + str(i) for i in range(30)] + 
+                                ['vel' + str(i) for i in range(30)] + 
+                                ['pos_2s', 'vel_2s', 'lane', 'lane_norm'])
+                
+                for k in convert_keys:
+                    data[k] = rotation(theta, data[k])
 
             yield data
     
