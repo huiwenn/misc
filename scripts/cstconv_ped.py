@@ -116,7 +116,7 @@ def train():
         inputs = ([
             batch['pos_enc'], batch['vel_enc'],
             batch['pos0'], batch['vel0'],
-            batch['accel'], sigmas,
+            batch['accel'], batch['sigmas'],
             batch['man_mask']
         ])
 
