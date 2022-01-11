@@ -337,6 +337,8 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
             losses += loss_f(pr_pos1, gt_pos1, pr_m1, batch['man_mask'].squeeze(-1))
 
             pr_agent, gt_agent, sigma_agent = pr_pos1[:,0], gt_pos1[:,0], pr_m1[:,0]
+            print(pr_agent,gt_agent)
+            print(sigma_agent)
 
             sigmas.append(sigma_agent.unsqueeze(1).detach().cpu())
             pred.append(pr_agent.unsqueeze(1).detach().cpu())

@@ -1,6 +1,7 @@
 "Functions loading the .pkl version preprocessed data"
 from tensorpack import dataflow
 from glob import glob
+import numpy as np
 import pickle
 import os
 
