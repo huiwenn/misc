@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import sys
+sys.path.append('.')
 sys.path.append('..')
 from collections import namedtuple
 import time
@@ -8,7 +9,6 @@ import json
 import pickle
 import argparse
 import datetime
-from ped_evaluate_dyna import evaluate
 #from argoverse.map_representation.map_api import ArgoverseMap
 from datasets.pedestrian_pkl_loader import read_pkl_data
 from train_utils import *
@@ -116,10 +116,6 @@ def train():
         m0 = -5*torch.eye(2, device=device).reshape((1,2,2)).repeat((batch_size//args.batch_divide, batch['pos0'].shape[1], 1, 1)) 
         # torch.zeros((batch['pos_enc'].shape[0], 60, 2, 2), device=device)
         sigma0 = calc_sigma(m0)
-       
-        box_zeros = torch.zeros(batch_size, 1, 2, device=device)
-        boxnorm_zeros = torch.zeros(batch_size, 1, 2, device=device)
-        
         inputs = ([
             batch['pos_enc'], batch['vel_enc'], 
             batch['pos0'], batch['vel0'], 
@@ -198,7 +194,7 @@ def train():
                     print("... batch " + str((batch_itr // args.batch_divide) + 1), end='', flush=True)
             sub_idx += 1
 
-            batch_tensor = process_batch_ped(batch, device, train_window=args.train_window)
+            batch_tensor = process_batch_ped_2d(batch, device, train_window=args.train_window)
             del batch
 
             data_fetch_latency = time.time() - data_fetch_start
@@ -327,11 +323,12 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         
         count += 1
         
-        batch = process_batch_ped(sample, device)
+        batch = process_batch_ped_2d(sample, device)
 
         m0 = -5*torch.eye(2, device=device).reshape((1,2,2)).repeat((batch['pos_enc'].shape[0], batch['pos0'].shape[1], 1, 1))
         #torch.zeros((batch['pos_enc'].shape[0], 60, 2, 2), device=device)
         sigma0 = calc_sigma(m0)
+
 
         inputs = ([
             batch['pos_enc'], batch['vel_enc'], 
@@ -356,7 +353,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
 
         pos0 = batch['pos0']
         vel0 = batch['vel0']
-        m0 = -5*torch.eye(2, device=device).reshape((1,2,2)).repeat((batch['pos_enc'].shape[0], batch['pos0'].shape[1], 1, 1)) #torch.zeros((batch_size, 60, 2, 2), device=device)
+        #torch.zeros((batch_size, 60, 2, 2), device=device)
         for j in range(train_window-1):
             pos_enc = torch.unsqueeze(pos0, 2)
             vel_enc = torch.unsqueeze(vel0, 2)

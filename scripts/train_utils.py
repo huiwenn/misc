@@ -15,6 +15,11 @@ def get_agent(pr: object, gt: object, pr_id: object, gt_id: object, agent_id: ob
 
     return torch.cat([pr_agent, pr_m_agent], dim=-1), gt_agent
 
+def twod_to_3d(in_tensor):
+    newshape = in_tensor.shape
+    z = torch.zeros(*newshape[:-1],1, device=in_tensor.device)
+    out_tensor = torch.cat([in_tensor,z], dim=-1)
+    return out_tensor
 
 def euclidean_distance(a, b, epsilon=1e-9, mask=1):
     return torch.sqrt(torch.sum((a - b)**2, axis=-1)*mask + epsilon)
@@ -205,7 +210,7 @@ def process_batch_ped(batch, device, train_window = 12, train_particle_num=40):
     return batch_tensor
 
 
-def process_batch_ped_2d(batch, device, train_window = 12, train_particle_num=60):
+def process_batch_ped_2d(batch, device, train_window = 12, train_particle_num=40):
     batch_tensor = {}
 
     batch_tensor['man_mask'] = torch.tensor(np.stack(batch['man_mask'])[:,:train_particle_num],
