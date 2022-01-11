@@ -2,6 +2,7 @@
 print('importing libraries')
 import os
 import sys
+sys.path.append('.')
 sys.path.append('..')
 from collections import namedtuple
 import time
@@ -9,7 +10,6 @@ import json
 import pickle
 import argparse
 import datetime
-from evaluate_dynamics import evaluate
 #from argoverse.map_representation.map_api import ArgoverseMap
 from datasets.argoverse_lane_loader import read_pkl_data
 from train_utils import *
@@ -55,7 +55,7 @@ def create_model():
         """Returns an instance of the network for training and evaluation"""
         
         model = ECCONetwork(radius_scale = 40,
-                            layer_channels = [8, 24, 24, 24, 3], #[16, 32, 32, 32, 3], 
+                            layer_channels = [8, 16, 16, 16, 3], #[8, 24, 24, 24, 3], #[16, 32, 32, 32, 3], 
                             encoder_hidden_size=21)
     else:
         from models.rho1_ECCO import ECCONetwork

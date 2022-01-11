@@ -431,14 +431,14 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     de = {}
     coverage = {}
     mis = {}
-    nll = {}
+    nlls = {}
 
     for k, v in prediction_gt.items():
         de[k] = torch.sqrt((v[0][:,0] - v[1][:,0])**2 + 
                         (v[0][:,1] - v[1][:,1])**2)
         coverage[k] = get_coverage(v[0][:,:2], v[1], v[0][:,3:].reshape(train_window,2,2)) #pr_pos, gt_pos, pred_m, car_mask)
         mis[k] = mis_loss(v[0][:,:2], v[1],v[0][:,3:].reshape(train_window,2,2))
-        nll[k] = nll(v[0][:,:2], v[1],v[0][:,3:].reshape(train_window,2,2))
+        nlls[k] = nll(v[0][:,:2], v[1],v[0][:,3:].reshape(train_window,2,2))
 
 
     ade = []
@@ -454,7 +454,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         amis.append(np.mean(v.numpy()))
     
     anll = []
-    for k, v in nll.items():
+    for k, v in nlls.items():
         anll.append(np.mean(v.numpy()))
 
     result['loss'] = total_loss.detach().cpu().numpy()
