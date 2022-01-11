@@ -41,6 +41,7 @@ parser.add_argument('--train', default=False, action='store_true')
 parser.add_argument('--evaluation', default=False, action='store_true')
 parser.add_argument('--load_model_path', default='', type=str, help='path to model to be loaded')
 parser.add_argument('--loss', default='nll', type=str, help='nll or ecco loss')
+parser.add_argument('--rotate', default=False, action='store_true')
 
 
 
@@ -112,12 +113,10 @@ def train():
 
     def train_one_batch(model, batch, loss_f, train_window=2):
 
-        #m0 = torch.zeros((batch['pos_enc'].shape[0], 60, 2, 2), device=device)
-        m0 = -5*torch.eye(2, device=device).reshape((1,2,2)).repeat((args.batch_size//args.batch_divide, batch['pos0'].shape[1], 1, 1))
         inputs = ([
             batch['pos_enc'], batch['vel_enc'],
             batch['pos0'], batch['vel0'],
-            batch['accel'], m0,
+            batch['accel'], sigmas,
             batch['man_mask']
         ])
 
@@ -297,12 +296,10 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         batch = process_batch_ped(sample, device)
         del sample
 
-        m0 = -5*torch.eye(2, device=device).reshape((1,2,2)).repeat((args.batch_size//args.batch_divide, batch['pos0'].shape[1], 1, 1))
-
         inputs = ([
             batch['pos_enc'], batch['vel_enc'],
             batch['pos0'], batch['vel0'],
-            batch['accel'], m0,
+            batch['accel'], batch['sigmas'],
             batch['man_mask']
         ])
 

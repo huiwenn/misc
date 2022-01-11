@@ -199,6 +199,9 @@ def process_batch_ped(batch, device, train_window = 12, train_particle_num=60):
     accel = batch_tensor['vel0'] - batch_tensor['vel_enc'][...,-1,:]
     # accel = torch.zeros(batch_size, 1, 2).to(device)
     batch_tensor['accel'] = accel
+    batch_size = batch_tensor['pos0'].shape[0]
+    batch_tensor['sigmas'] = torch.zeros(batch_size, train_particle_num, 4, 2).to(device)
+
     return batch_tensor
 
 

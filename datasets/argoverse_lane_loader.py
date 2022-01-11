@@ -54,7 +54,7 @@ class ArgoverseDataset(IterableDataset):
                                 ['pos_2s', 'vel_2s', 'lane', 'lane_norm'])
                 
                 for k in convert_keys:
-                    data[k] = rotation(theta, data[k])
+                    data[k] = [rotation(theta, data[k][0])]
 
             yield data
     
