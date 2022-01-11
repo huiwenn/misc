@@ -173,7 +173,7 @@ def process_batch(batch, device, train_window = 30):
     return batch_tensor
 
 
-def process_batch_ped(batch, device, train_window = 12, train_particle_num=60):
+def process_batch_ped(batch, device, train_window = 12, train_particle_num=40):
     batch_tensor = {}
 
     batch_tensor['man_mask'] = torch.tensor(np.stack(batch['man_mask'])[:,:train_particle_num],
@@ -200,7 +200,6 @@ def process_batch_ped(batch, device, train_window = 12, train_particle_num=60):
     # accel = torch.zeros(batch_size, 1, 2).to(device)
     batch_tensor['accel'] = accel
     batch_size = batch_tensor['pos0'].shape[0]
-    print(batch_tensor['pos0'].shape)
     batch_tensor['sigmas'] = torch.zeros(batch_size, train_particle_num, 2, 2).to(device)
 
     return batch_tensor
