@@ -143,6 +143,8 @@ def train():
             pr_pos1, pr_vel1, pr_m1, states = model(inputs, states)
             gt_pos1 = batch['pos'+str(i+2)]
             
+            print('pr_pos1',pr_pos1.shape)
+
             losses += loss_f(pr_pos1, gt_pos1, pr_m1, batch['man_mask'].squeeze(-1))
 
         total_loss = torch.sum(losses,axis=0) / (train_window)
