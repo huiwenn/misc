@@ -839,6 +839,7 @@ def main():
     for i in range(start_rollout_idx, len(ROLLOUT_LENS)):
         rollout_len = ROLLOUT_LENS[i]
         logger = Logger(log_dir, name="{}".format(rollout_len))
+        global best_loss
         best_loss = float("inf")
         prev_loss = best_loss
         rollout_epoch = 0
