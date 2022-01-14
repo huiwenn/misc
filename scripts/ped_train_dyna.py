@@ -427,7 +427,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         fdes.append(v.numpy()[-1])
     result['FDE'] = np.mean(fdes)
     
-    if train_window >= 29:
+    if train_window >= 11:
         de1s = []
         de2s = []
         de3s = []
@@ -435,13 +435,13 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         cov2s = []
         cov3s = []
         for k, v in de.items():
-            de1s.append(v.numpy()[10])
-            de2s.append(v.numpy()[20])
+            de1s.append(v.numpy()[4])
+            de2s.append(v.numpy()[8])
             de3s.append(v.numpy()[-1])
         for k,v in coverage.items():
-            cov1s.append(np.mean(v[:10].numpy()))
-            cov2s.append(np.mean(v[10:20].numpy()))
-            cov3s.append(np.mean(v[20:30].numpy()))
+            cov1s.append(np.mean(v[:4].numpy()))
+            cov2s.append(np.mean(v[4:8].numpy()))
+            cov3s.append(np.mean(v[8:].numpy()))
 
         result['DE@1s'] = np.mean(de1s)
         result['DE@1s_std'] = np.std(de1s)

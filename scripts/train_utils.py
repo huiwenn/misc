@@ -15,11 +15,6 @@ def get_agent(pr: object, gt: object, pr_id: object, gt_id: object, agent_id: ob
 
     return torch.cat([pr_agent, pr_m_agent], dim=-1), gt_agent
 
-def twod_to_3d(in_tensor):
-    newshape = in_tensor.shape
-    z = torch.zeros(*newshape[:-1],1, device=in_tensor.device)
-    out_tensor = torch.cat([in_tensor,z], dim=-1)
-    return out_tensor
 
 def euclidean_distance(a, b, epsilon=1e-9, mask=1):
     return torch.sqrt(torch.sum((a - b)**2, axis=-1)*mask + epsilon)
@@ -73,6 +68,11 @@ def calc_sigma(M):
     # here sigma[0,0] ranges from 0.13 to 27.7
     sigma_scaled = 0.5*sigma
     return sigma_scaled
+
+def calc_u(sigma):
+    L, V = torch.linalg.eig(sigma)
+    U = V @ torch.diag_embed(L.pow(0.5))
+    return U
 
 def nll(pr_pos, gt_pos, pred_m, car_mask=1):
     sigma = calc_sigma(pred_m)

@@ -25,15 +25,10 @@ python scripts/train.py --dataset_path /data/argoverse --rho-reg --batch_size 14
 {3.84 2.09 0.967}
 
 #reproduction scripts
-python scripts/train.py --dataset_path ../argoverse_data --rho-reg --batch_size 1 --val_batch_size 1 --use_lane --train --model_name pecco_run1 --batches_per_epoch 1200 --val_batches 50 --epochs 100 --loss nll
-python scripts/train_dynamics.py --dataset_path ../argoverse_data --rho-reg --batch_size 1 --val_batch_size 1 --use_lane --train --model_name peccodyna_scaled --batches_per_epoch 1200 --val_batches 50 --epochs 100 --loss nll
+python scripts/train.py --dataset_path ../argoverse_data --rho-reg --batch_size 1 --val_batch_size 1 --use_lane --train --model_name pecco_run1 --batches_per_epoch 1200 --val_batches 50 --epochs 100 --loss nll --cuda_visible_devices 4,5,6,7
 
-python scripts/ped_train_dyna.py --dataset_path ../pedestrian --rho-reg --batch_size 1 --val_batch_size 1 --model_name ped_local --batches_per_epoch 1200 --val_batches 30 --epochs 100 --loss nll --train
-python scripts/ped_train.py --dataset_path ../pedestrian --rho-reg --batch_size 1 --val_batch_size 1 --model_name ped_nodyna_local --batches_per_epoch 1400 --val_batches 40 --epochs 100 --loss nll --train
 
-python scripts/ped_train.py --dataset_path ../pedestrian --rho-reg --batch_size 4 --val_batch_size 4 --model_name ped_nodyna --batches_per_epoch 600 --val_batches 100 --epochs 100 --loss nll --train
-
-python scripts/ped_train_dyna.py --dataset_path ../ped_one --rho-reg --batch_size 1 --val_batch_size 1 --model_name ped_local --batches_per_epoch 1 --val_batches 1 --epochs 100 --loss nll --val_window 6 --train
+python scripts/train_dynamics.py --dataset_path ../argoverse --rho-reg --batch_size 32 --batch_divide 8 --val_batch_size 4 --use_lane --train --model_name pecco_dyna_argo_32 --batches_per_epoch 150 --val_batches 50 --epochs 100 --loss nll --cuda_visible_devices 4,5,6,7
 
 python scripts/cstconv_ped.py --dataset_path ../pedestrian --rho-reg --batch_size 4 read_pkl_data
 
@@ -77,7 +72,11 @@ python scripts/cstconv.py --dataset_path ../argoverse --rho-reg --batch_size 24 
 
 python scripts/cstconv.py --dataset_path ../argoverse --rho-reg --batch_size 1 --batch_divide 1 --val_batch_size 3 --use_lane --train --model_name ctsconv_argo --batches_per_epoch 1 --val_batches 30 --loss nll --cuda_visible_devices 5,6,7
 
-python scripts/cstconv.py --dataset_path ../argoverse --rho-reg --batch_size 24 --batch_divide 8 --val_batch_size 3 --use_lane --train --model_name ctsconv_argo --batches_per_epoch 150 --val_batches 40 --rotate --loss nll --cuda_visible_devices 3,6,7 
+python scripts/cstconv_ped.py --dataset_path ../pedestrian/processed --rho-reg --batch_size 24 --batch_divide 8 --val_batch_size 3 --use_lane --train --model_name ctsconv_nll_ped --batches_per_epoch 150 --val_batches 40 --loss nll --cuda_visible_devices 3,6,7 
+
+python scripts/cstconv_ped.py --dataset_path ../pedestrian/processed --rho-reg --batch_size 24 --batch_divide 8 --val_batch_size 3 --use_lane --train --model_name ctsconv_nll_ped --batches_per_epoch 150 --val_batches 40 --loss mis --cuda_visible_devices 0,3,4 
+
+--rotate 
 models:
 
 ## argoverse
