@@ -23,7 +23,7 @@ parser = argparse.ArgumentParser(description="Training setting and hyperparamete
 parser.add_argument('--cuda_visible_devices', default='0,1,2,3')
 parser.add_argument('--dataset_path', default='/path/to/argoverse_forecasting/', 
                     help='path to dataset folder, which contains train and val folders')
-parser.add_argument('--train_window', default=5, type=int, help='how many timestamps to iterate in training')
+parser.add_argument('--train_window', default=4, type=int, help='how many timestamps to iterate in training')
 parser.add_argument('--val_window', default=12, type=int, help='how many timestamps to iterate in validation')
 parser.add_argument('--batch_divide', default=4, type=int, 
                     help='divide one batch into several packs, and train them iterativelly.')
@@ -60,7 +60,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("using device", device)
 
 val_path = os.path.join(args.dataset_path, 'val') #, 'lane_data'
-train_path = os.path.join(args.dataset_path, 'train') #, 'lane_data'
+train_path = os.path.join(args.dataset_path, 'val') #, 'lane_data'
     
 def create_model():
     from models.cstcov_ped import ParticlesNetwork
@@ -142,12 +142,14 @@ def train():
             
             pr_pos1, pr_vel1, pr_m1, states = model(inputs, states)
             gt_pos1 = batch['pos'+str(i+2)]
-            
-            print('pr_pos1',pr_pos1.shape)
 
+            thisroundloss = loss_f(pr_pos1, gt_pos1, pr_m1, batch['man_mask'].squeeze(-1))
+            #print(pr_pos1, gt_pos1)
+            #print(calc_sigma(pr_m1))
+            #print(thisroundloss)
             losses += loss_f(pr_pos1, gt_pos1, pr_m1, batch['man_mask'].squeeze(-1))
 
-        total_loss = torch.sum(losses,axis=0) / (train_window)
+        total_loss = torch.sum(losses) #,axis=0) / (train_window)
         return total_loss
     
     epochs = args.epochs
@@ -338,9 +340,10 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
 
             losses += loss_f(pr_pos1, gt_pos1, pr_m1, batch['man_mask'].squeeze(-1))
 
-            pr_agent, gt_agent, sigma_agent = pr_pos1 , gt_pos1 , pr_m1 #pr_pos1[:,0], gt_pos1[:,0], pr_m1[:,0]
+            pr_agent, gt_agent, sigma_agent = pr_pos1[:,0], gt_pos1[:,0], pr_m1[:,0]
             #print(pr_agent,gt_agent)
             #print(sigma_agent)
+            #pr_pos1 , gt_pos1 , pr_m1 #
 
             sigmas.append(sigma_agent.unsqueeze(1).detach().cpu())
             pred.append(pr_agent.unsqueeze(1).detach().cpu())
@@ -371,6 +374,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
 
     ade = []
     for k, v in de.items():
+        print(v)
         ade.append(np.mean(v.numpy()))
 
     acoverage = []
