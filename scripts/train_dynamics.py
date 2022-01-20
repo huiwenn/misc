@@ -392,7 +392,6 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
 
             pr_pos1, pr_vel1, pr_m1, states = model(inputs, states)
             clean_cache(device)
-            
 
             gt_pos1 = data['pos'+str(j+2)]
 

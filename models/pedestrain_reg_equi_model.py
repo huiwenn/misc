@@ -135,7 +135,9 @@ class ParticlesNetwork(nn.Module):
 
         output_conv_fluid = self.conv_fluid(p, p, fluid_feats, fluid_mask)
         output_dense_fluid = self.dense_fluid(fluid_feats)
-        
+        #print('output_conv_fluid', output_conv_fluid)
+        #print('output_dense_fluid',output_dense_fluid )
+
         feats = torch.cat((output_conv_fluid, output_dense_fluid), -2)
         # self.outputs = [feats]
         output = feats
@@ -146,8 +148,10 @@ class ParticlesNetwork(nn.Module):
             # in_feats = self.activation(output)
             # in_feats = output
             output_conv = conv(p, p, in_feats, fluid_mask, in_feats)
+            #print('output_conv', output_conv)
             output_dense = dense(in_feats)
-            
+            #print('output_conv', output_dense)
+
             # if last dim size of output from cur dense layer is same as last dim size of output
             # current output should be based off on previous output
 
@@ -196,6 +200,9 @@ class ParticlesNetwork(nn.Module):
 
         # a = (v0 - v0_enc[...,-1,:]) / self.timestep
         p1, v1 = self.update_pos_vel(p0, v0, a)
+
+        #print('p1',p1)
+        #print('v1',v1)
 
         pos_correction = self.compute_correction(p1, v1, feats, fluid_mask)
         p_corrected, v_corrected = self.apply_correction(p0, p1, pos_correction[..., 0, :])

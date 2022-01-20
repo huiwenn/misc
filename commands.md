@@ -54,7 +54,7 @@ CUDA_VISIBLE_DEVICES=0 python scripts/lstm_train_test.py --train_features ../arg
 
 CUDA_VISIBLE_DEVICES=0 python scripts/lstm_train_test.py --train_features ../argoverse/agents_train_transi.npy  --val_features ../argoverse/agents_val_transi.npy --name lstm_argo_transi
 
-CUDA_VISIBLE_DEVICES=0 python scripts/lstm_train_test.py --train_features ../argoverse/agents_train_transi.npy  --val_features ../argoverse/agents_val_transi.npy --name lstm_argo_rot --rotation
+CUDA_VISIBLE_DEVICES=0 python scripts/lstm_train_test.py --val_features ../argoverse/agents_val_rotation.npy --name lstm_argo_rot_3 --model_path checkpoints/lstm_argo_rot2/LSTM_rollout30.pth.tar --traj_save_path checkpoints/lstm_argo_rot/paths.pkl --test 
 
 
 CUDA_VISIBLE_DEVICES=4 python scripts/lstm_train_test.py --train_features ../argoverse/agents_train_transi.npy  --val_features ../argoverse/agents_val_transi.npy --name lstm_argo_mis --mis_metric

@@ -60,17 +60,26 @@ def calc_sigma_old(M):
     # scalling
     return 0.1*torch.matrix_exp(sigma)
 
+def calc_sigma_edit(M):
+    M = torch.tanh(M)
+    expM = torch.matrix_exp(M)
+    expMT = torch.matrix_exp(torch.transpose(M,-2,-1))
+    sigma = torch.einsum('...xy,...yz->...xz', expM, expMT)
+    return 0.1*sigma
+
 def calc_sigma(M):
     M = torch.tanh(M)
     expM = torch.matrix_exp(M)
     expMT = torch.matrix_exp(torch.transpose(M,-2,-1))
     sigma = torch.einsum('...xy,...yz->...xz', expM, expMT)
     # here sigma[0,0] ranges from 0.13 to 27.7
-    sigma_scaled = 0.5*sigma
+    sigma_scaled = 0.8*sigma #for argoverse 0.5, for ped 0.8
     return sigma_scaled
 
 def calc_u(sigma):
-    L, V = torch.linalg.eig(sigma)
+    L, V = torch.linalg.eigh(sigma)
+    #print('v', V)
+    #print('L', L)
     U = V @ torch.diag_embed(L.pow(0.5))
     return U
 

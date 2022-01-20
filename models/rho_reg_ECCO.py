@@ -173,7 +173,7 @@ class ECCONetwork(nn.Module):
         v0_enc: [batch, num_part, timestamps, 2]
         Computes 1 simulation timestep"""
         p0_enc, v0_enc, p0, v0, a, other_feats, box, box_feats, fluid_mask, box_mask = inputs
-        
+
         if states is None:
             if other_feats is None:
                 feats = v0_enc
@@ -184,6 +184,9 @@ class ECCONetwork(nn.Module):
                 feats = v0_enc
                 feats = torch.cat((states[0][...,1:,:], feats), -2)
             else:
+                #print('other feats', other_feats.shape)
+                #print('states', len(states), states[0].shape)
+                #print('v0_enc', v0_enc.shape)
                 feats = torch.cat((other_feats, states[0][...,1:,:], v0_enc), -2)
         
         # a = (v0 - v0_enc[...,-1,:]) / self.timestep

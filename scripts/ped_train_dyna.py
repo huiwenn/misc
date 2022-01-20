@@ -279,6 +279,7 @@ def evaluation():
 
 
     trained_model = torch.load(model_name + '.pth')
+    print('loaded model ' + model_name)
     trained_model.eval()
     
     with torch.no_grad():
@@ -317,6 +318,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         sigmas = []
         pred = []
         gt = []
+        samples = []
 
         if count % 1 == 0:
             print('{}'.format(count + 1), end=' ', flush=True)
@@ -341,10 +343,12 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         gt_pos1 = batch['pos1']
         
         sigma0 = sigma0 + calc_sigma(pr_m1)
-        losses = loss_f(pr_pos1, gt_pos1, sigma0, batch['man_mask'].squeeze(-1))
-        
+        losses = loss_f(pr_pos1, gt_pos1, sigma0, batch['man_mask'].squeeze(-1))        
         pr_agent, gt_agent, sigma_agent = pr_pos1[:,0], gt_pos1[:,0], sigma0[:,0]
-        
+        p = torch.distributions.MultivariateNormal(pr_agent[:, :2], sigma_agent.reshape(sigma_agent.shape[0],2,2))
+        sample = p.sample(sample_shape=(6,))
+
+        samples.append(sample.unsqueeze(1).detach().cpu())
         sigmas.append(sigma_agent.unsqueeze(1).detach().cpu())
         pred.append(pr_agent.unsqueeze(1).detach().cpu())
         gt.append(gt_agent.unsqueeze(1).detach().cpu())
@@ -375,6 +379,10 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
 
             pr_agent, gt_agent, sigma_agent = pr_pos1[:,0], gt_pos1[:,0], sigma0[:,0]
             
+            p = torch.distributions.MultivariateNormal(pr_agent[:, :2], sigma_agent.reshape(sigma_agent.shape[0],2,2))
+            sample = p.sample(sample_shape=(6,))
+
+            samples.append(sample.unsqueeze(1).detach().cpu())
             sigmas.append(sigma_agent.unsqueeze(1).detach().cpu())
             pred.append(pr_agent.unsqueeze(1).detach().cpu())
             gt.append(gt_agent.unsqueeze(1).detach().cpu())
@@ -393,14 +401,22 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     
     result = {}
     de = {}
+    minde = {}
     coverage = {}
     mis = {}
 
     for k, v in prediction_gt.items():
+        samples = v[3]
+        gt_expand = v[1].repeat((6, 1, 1))
+        allde = torch.sqrt((samples[:,:,0] - gt_expand[:,:,0])**2 + (samples[:,:,1] - gt_expand[:,:,1])**2)
+        minde[k] = torch.min(allde, 0).values.numpy()
+
         de[k] = torch.sqrt((v[0][:,0] - v[1][:,0])**2 +
                            (v[0][:,1] - v[1][:,1])**2)
         coverage[k] = get_coverage(v[0][:,:2], v[1], v[2], sigma_ready=True)
         mis[k] = mis_loss(v[0][:,:2], v[1], v[2], sigma_ready=True)
+        nll[k] = nll_dyna(v[0][:,:2], v[1], v[2].reshape(v[2].shape[0],2,2))
+
 
     ade = []
     for k, v in de.items():
@@ -414,12 +430,18 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     for k, v in mis.items():
         amis.append(np.mean(v.numpy()))
 
+    anll = []
+    for k, v in nll.items():
+        anll.append(np.mean(v.numpy()))   
 
     result['loss'] = total_loss.detach().cpu().numpy()
     result['ADE'] = np.mean(ade)
     result['ADE_std'] = np.std(ade)
     result['coverage'] = np.mean(acoverage)
     result['mis'] = np.mean(amis)
+    result['minADE'] = np.mean(list(minde.values()))
+    result['minFDE'] = np.mean(np.array(list(minde.values()))[:,-1])
+    result['nll'] = np.mean(anll)
 
 
     fdes = []
