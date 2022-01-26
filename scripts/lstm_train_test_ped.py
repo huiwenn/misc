@@ -500,6 +500,7 @@ def validate(
     total_loss = []
     ades = []
     fdes = np.array([])
+    sample_de_all =[]
     nll = []
     mis = []
     cov = []
@@ -547,6 +548,7 @@ def validate(
 
         # Decode hidden state in future trajectory
         de = []
+        samplede = []
         miss = []
         covv = []
         nlls = []
@@ -567,7 +569,16 @@ def validate(
             decoder_input = output
             de.append(torch.sqrt((decoder_output[:, 0] - target[:, di, 0])**2 +
                                (decoder_output[:, 1] - target[:, di, 1])**2).detach().cpu().numpy())
-            #print('de',de)
+            
+            covs = make_cov(output)
+            p = torch.distributions.MultivariateNormal(decoder_output[:, :2], covs)
+            sample = p.sample(sample_shape=(6,))
+            gt_expand = target[:, di, :2].repeat((6, 1, 1))
+
+            des = torch.sqrt((sample[:,:,0] - gt_expand[:,:,0])**2 +
+                               (sample[:,:,1] - gt_expand[:,:,1])**2).detach().cpu().numpy()
+            samplede.append(des)
+
             nlls.append(nll_loss_2(output[:, :5], target[:, di, :2]).detach().cpu().numpy())
             miss.append(quantile_loss(output[:, :5], target[:, di, :2]).detach().cpu().numpy())
             covv.append(get_coverage(output[:, :5], target[:, di, :2]).detach().cpu().numpy())
@@ -579,6 +590,8 @@ def validate(
         ade = np.mean(np.array(de))
         ades.append(ade)
         fde = de[-1]
+        sample_de_all.append(np.array(samplede))
+
 
         fdes = np.concatenate([fdes,fde])
         if rollout_len>=output_length:
@@ -600,9 +613,12 @@ def validate(
     cov1s = np.mean(cov_1s)
     cov2s = np.mean(cov_2s)
     cov3s = np.mean(cov_3s)
+    sample_de_all = np.array(sample_de_all[:-1])
+    minade = np.mean(np.min(sample_de_all, axis=2))
+    minfde = np.mean(np.min(sample_de_all[:,-1,:,:],axis=1))
     cprint(
         f"Val -- Epoch:{epoch}, loss:{val_loss}, ade:{ade}, fde:{fde}, mis:{mrs}, \
-        cov:{cov}, 1s:{cov1s}, 2s:{cov2s}, 3s:{cov3s}, nll:{nll}, Rollout: {rollout_len}",
+        cov:{cov}, 1s:{cov1s}, 2s:{cov2s}, 3s:{cov3s}, nll:{nll},  minade:{minade}, minfde:{minfde}, Rollout: {rollout_len}",
         color="green",
     )
 
@@ -731,6 +747,12 @@ def Gaussian2d(x: torch.Tensor) -> torch.Tensor :
     rho     = torch.tanh(x[:, 4])
     return torch.stack([x_mean, y_mean, sigma_x, sigma_y, rho], dim=1)
 
+def make_cov(x):
+    sigma_x = x[:,2].pow(2).unsqueeze(-1)
+    sigma_y = x[:,3].pow(2).unsqueeze(-1)
+    off_diag = (x[:,4]*x[:,2]*x[:,3]).unsqueeze(-1)
+    cov = torch.cat((sigma_x, off_diag, off_diag, sigma_y), 1)
+    return cov.reshape(cov.shape[0], 2, 2)
 
 def quantile_loss(pred: torch.Tensor, data: torch.Tensor, alpha=0.9):
 
@@ -825,7 +847,7 @@ def main():
             args.model_path, encoder, decoder, encoder_optimizer,
             decoder_optimizer)
         start_epoch = epoch + 1
-        if rollout_len<30:
+        if rollout_len<12:
             start_rollout_idx = ROLLOUT_LENS.index(rollout_len) + 1
         else:
             start_rollout_idx = ROLLOUT_LENS.index(rollout_len)
@@ -839,19 +861,21 @@ def main():
     log_dir = os.path.join(os.getcwd(), "lstm_logs", baseline_key)
 
     # Get PyTorch Dataset
-    print('loading train dataset')
-    train_dataset = LSTMDataset(args.train_features, args)
+    if not args.test:
+        print('loading train dataset')
+        train_dataset = LSTMDataset(args.train_features, args)
+
+        # Setting Dataloaders
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset,
+            batch_size=args.train_batch_size,
+            shuffle=True,
+            drop_last=False,
+            collate_fn=model_utils.my_collate_fn,
+        )
+
     print('loading val dataset')
     val_dataset = LSTMDataset(args.val_features, args)
-
-    # Setting Dataloaders
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset,
-        batch_size=args.train_batch_size,
-        shuffle=True,
-        drop_last=False,
-        collate_fn=model_utils.my_collate_fn,
-    )
 
     val_loader = torch.utils.data.DataLoader(
         val_dataset,
@@ -901,7 +925,7 @@ def main():
                 epoch += 1
 
                 #indent this out if test
-                if epoch % 2 == 0 or args.test:
+                if epoch % 2 == 0:
                     start = time.time()
                     prev_loss, decrement_counter = validate(
                         val_loader,
@@ -926,6 +950,31 @@ def main():
                     # If val loss increased 3 times consecutively, go to next rollout length
                     if decrement_counter > 2 or args.test:
                         break
+        else:
+            start = time.time()
+            prev_loss, decrement_counter = validate(
+                val_loader,
+                epoch,
+                criterion,
+                logger,
+                encoder,
+                decoder,
+                encoder_optimizer,
+                decoder_optimizer,
+                model_utils,
+                prev_loss,
+                decrement_counter,
+                rollout_len,
+            )
+            end = time.time()
+            print('decrement_counter',decrement_counter)
+            print(
+                f"Validation completed in {(end - start) / 60.0} mins, Total time: {(end - global_start_time) / 60.0} mins"
+            )
+
+            # If val loss increased 3 times consecutively, go to next rollout length
+            if decrement_counter > 2 or args.test:
+                break
 
         '''
         start_time = time.time()

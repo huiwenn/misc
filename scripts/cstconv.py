@@ -42,6 +42,7 @@ parser.add_argument('--evaluation', default=False, action='store_true')
 parser.add_argument('--load_model_path', default='', type=str, help='path to model to be loaded')
 parser.add_argument('--loss', default='nll', type=str, help='nll or ecco loss')
 parser.add_argument('--rotate', default=False, action='store_true')
+parser.add_argument('--cannon', default=False, action='store_true')
 
 
 feature_parser = parser.add_mutually_exclusive_group(required=False)
@@ -86,7 +87,7 @@ def train():
 
     print('loading tain dataset')
     dataset = read_pkl_data(train_path, batch_size=args.batch_size / args.batch_divide,
-                            repeat=True, shuffle=True, max_lane_nodes=900, rotate=args.rotate)
+                            repeat=True, shuffle=True, max_lane_nodes=900, rotate=args.rotate, cannon=args.cannon)
 
     data_iter = iter(dataset)
 
@@ -399,9 +400,6 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
             pos_enc = torch.unsqueeze(pos0, 2)
             vel_enc = torch.unsqueeze(vel0, 2)
             
-            # test todo 
-            # pr_m1 = torch.zeros((batch_size, 60, 2, 2), device=device)
-
             inputs = (pos_enc, vel_enc, pr_pos1, pr_vel1, data['accel'],
                       torch.cat([m0, pr_m1], dim=-2), 
                       data['lane'],

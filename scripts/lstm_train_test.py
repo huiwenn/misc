@@ -611,8 +611,8 @@ def validate(
     cov2s = np.mean(cov_2s)
     cov3s = np.mean(cov_3s)
     sample_de_all = np.array(sample_de_all[:-1])
-    print('sample_de_al', sample_de_all.shape)
-    print('min shape', np.min(sample_de_all, axis=2).shape)
+    #print('sample_de_al', sample_de_all.shape)
+    #print('min shape', np.min(sample_de_all, axis=2).shape)
     minade = np.mean(np.min(sample_de_all, axis=2))
     minfde = np.mean(np.min(sample_de_all[:,-1,:,:],axis=1))
     cprint(
@@ -768,13 +768,13 @@ def Gaussian2d(x: torch.Tensor) -> torch.Tensor :
     rho     = torch.tanh(x[:, 4])
     return torch.stack([x_mean, y_mean, sigma_x, sigma_y, rho], dim=1)
 
+
 def make_cov(x):
     sigma_x = x[:,2].pow(2).unsqueeze(-1)
     sigma_y = x[:,3].pow(2).unsqueeze(-1)
     off_diag = (x[:,4]*x[:,2]*x[:,3]).unsqueeze(-1)
     cov = torch.cat((sigma_x, off_diag, off_diag, sigma_y), 1)
     return cov.reshape(cov.shape[0], 2, 2)
-
 
 
 def quantile_loss(pred: torch.Tensor, data: torch.Tensor, alpha=0.9):
@@ -922,6 +922,7 @@ def main():
     for i in range(start_rollout_idx, len(ROLLOUT_LENS)):
         rollout_len = ROLLOUT_LENS[i]
         logger = Logger(log_dir, name="{}".format(rollout_len))
+        global best_loss
         best_loss = float("inf")
         prev_loss = best_loss
         rollout_epoch = 0
@@ -975,7 +976,7 @@ def main():
                     )
 
                     # If val loss increased 3 times consecutively, go to next rollout length
-                    if decrement_counter > 2:
+                    if decrement_counter >= 2:
                         break
          
         if args.test:

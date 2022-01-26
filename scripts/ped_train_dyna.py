@@ -389,12 +389,13 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
             
             #clean_cache(device)
 
-        predict_result = (torch.cat(pred, axis=1), torch.cat(gt, axis=1), torch.cat(sigmas,axis=1))
+        predict_result = (torch.cat(pred, axis=1), torch.cat(gt, axis=1), torch.cat(sigmas,axis=1), torch.cat(samples,axis=1))
 
         scenes = batch['scene_idx'].tolist()
 
         for idx, scene_id in enumerate(scenes):
-            prediction_gt[scene_id] = (predict_result[0][idx], predict_result[1][idx], predict_result[2][idx])
+            prediction_gt[scene_id] = (predict_result[0][idx], predict_result[1][idx], 
+                                       predict_result[2][idx],  predict_result[3][:,:,idx])
     
     #print('predgt', prediction_gt)
     total_loss = torch.sum(losses,axis=0) / (train_window) 
@@ -404,6 +405,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     minde = {}
     coverage = {}
     mis = {}
+    nll = {}
 
     for k, v in prediction_gt.items():
         samples = v[3]

@@ -2,6 +2,7 @@
 from glob import glob
 import pickle
 import os
+import math
 import numpy as np
 from typing import Any, Dict, List, Tuple, Union
 #from argoverse.map_representation.map_api import ArgoverseMap
@@ -11,10 +12,11 @@ from torch.utils.data import IterableDataset, DataLoader
 
 class ArgoverseDataset(IterableDataset):
     def __init__(self, data_path: str, 
-                 max_lane_nodes=650, min_lane_nodes=0, rotate=False, shuffle=True):
+                 max_lane_nodes=650, min_lane_nodes=0, rotate=False, cannon=False, shuffle=True):
         super(ArgoverseDataset, self).__init__()
         self.data_path = data_path
         self.rotate = rotate
+        self.cannon = cannon
         self.pkl_list = glob(os.path.join(self.data_path, '*'))
         if shuffle:
             np.random.shuffle(self.pkl_list)
@@ -49,6 +51,22 @@ class ArgoverseDataset(IterableDataset):
 
             if self.rotate:
                 theta = (np.random.rand(1) * 2 * np.pi)[0]
+                convert_keys = (['pos' + str(i) for i in range(30)] + 
+                                ['vel' + str(i) for i in range(30)] + 
+                                ['pos_2s', 'vel_2s', 'lane', 'lane_norm'])
+                
+                for k in convert_keys:
+                    data[k] = [rotation(theta, data[k][0])]
+            
+            if self.cannon:
+                trackid = np.expand_dims(data['track_id0'][0], -1)
+                agent = (trackid == data['agent_id']).nonzero()[0][0]
+                arctan = data['vel0'][0][agent,1]/data['vel0'][0][agent,0]
+                if math.isnan(arctan):
+                    theta = 0
+                    print(data['vel0'][0][agent,:])
+                else:
+                    theta = np.arctan(arctan)
                 convert_keys = (['pos' + str(i) for i in range(30)] + 
                                 ['vel' + str(i) for i in range(30)] + 
                                 ['pos_2s', 'vel_2s', 'lane', 'lane_norm'])

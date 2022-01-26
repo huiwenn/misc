@@ -291,6 +291,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         pred = []
         gt = []
         sigmas = []
+        samples = []
 
         if count % 1 == 0:
             print('{}'.format(count + 1), end=' ', flush=True)
@@ -313,7 +314,10 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         losses = loss_f(pr_pos1, gt_pos1, pr_m1, batch['man_mask'].squeeze(-1))
 
         pr_agent, gt_agent, sigma_agent = pr_pos1[:,0], gt_pos1[:,0], pr_m1[:,0]
+        p = torch.distributions.MultivariateNormal(pr_agent[:, :2], calc_sigma(sigma_agent))
+        sample = p.sample(sample_shape=(6,))
 
+        samples.append(sample.unsqueeze(1).detach().cpu())
         sigmas.append(sigma_agent.unsqueeze(1).detach().cpu())
         pred.append(pr_agent.unsqueeze(1).detach().cpu())
         gt.append(gt_agent.unsqueeze(1).detach().cpu())
@@ -341,9 +345,11 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
             losses += loss_f(pr_pos1, gt_pos1, pr_m1, batch['man_mask'].squeeze(-1))
 
             pr_agent, gt_agent, sigma_agent = pr_pos1[:,0], gt_pos1[:,0], pr_m1[:,0]
-            #print(pr_agent,gt_agent)
-            #print(sigma_agent)
-            #pr_pos1 , gt_pos1 , pr_m1 #
+            
+            p = torch.distributions.MultivariateNormal(pr_agent[:, :2], calc_sigma(sigma_agent))
+            sample = p.sample(sample_shape=(6,))
+
+            samples.append(sample.unsqueeze(1).detach().cpu())
 
             sigmas.append(sigma_agent.unsqueeze(1).detach().cpu())
             pred.append(pr_agent.unsqueeze(1).detach().cpu())
@@ -351,12 +357,13 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
 
         clean_cache(device)
 
-        predict_result = (torch.cat(pred, axis=1), torch.cat(gt, axis=1), torch.cat(sigmas,axis=1))
+        predict_result = (torch.cat(pred, axis=1), torch.cat(gt, axis=1), torch.cat(sigmas,axis=1), torch.cat(samples,axis=1))
 
         scenes = batch['scene_idx'].tolist()
 
         for idx, scene_id in enumerate(scenes):
-            prediction_gt[scene_id] = (predict_result[0][idx], predict_result[1][idx], predict_result[2][idx])
+            prediction_gt[scene_id] = (predict_result[0][idx], predict_result[1][idx], 
+                                       predict_result[2][idx], predict_result[3][:,:,idx])
 
     total_loss = torch.sum(losses,axis=0) / (train_window)
 
@@ -365,16 +372,25 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     de = {}
     coverage = {}
     mis = {}
+    minde = {}
+    nll_d = {}
 
     for k, v in prediction_gt.items():
+        samples = v[3]
+        gt_expand = v[1].repeat((6, 1, 1))
+        allde = torch.sqrt((samples[:,:,0] - gt_expand[:,:,0])**2 + (samples[:,:,1] - gt_expand[:,:,1])**2)
+        minde[k] = torch.min(allde, 0).values.numpy()
+
         de[k] = torch.sqrt((v[0][:,0] - v[1][:,0])**2 +
                            (v[0][:,1] - v[1][:,1])**2)
         coverage[k] = get_coverage(v[0][:,:2], v[1], v[2])
         mis[k] = mis_loss(v[0][:,:2], v[1], v[2])
+        nll_d[k] = nll(v[0][:,:2], v[1], v[2])
+
 
     ade = []
     for k, v in de.items():
-        print(v)
+        #print(v)
         ade.append(np.mean(v.numpy()))
 
     acoverage = []
@@ -384,13 +400,19 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     amis = []
     for k, v in mis.items():
         amis.append(np.mean(v.numpy()))
+    
+    anll = []
+    for k, v in nll_d.items():
+        anll.append(np.mean(v.numpy()))        
 
     result['loss'] = total_loss.detach().cpu().numpy()
     result['ADE'] = np.mean(ade)
+    result['minADE'] = np.mean(list(minde.values()))
+    result['minFDE'] = np.mean(np.array(list(minde.values()))[:,-1])
     result['ADE_std'] = np.std(ade)
     result['coverage'] = np.mean(acoverage)
     result['mis'] = np.mean(amis)
-
+    result['nll'] = np.mean(anll)
     fdes = []
     for k, v in de.items():
         fdes.append(v.numpy()[-1])

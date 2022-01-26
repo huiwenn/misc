@@ -106,7 +106,7 @@ def train():
 
     model = MyDataParallel(model)
     optimizer = torch.optim.Adam(model.parameters(), args.base_lr, betas=(0.9, 0.999), weight_decay=4e-4)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size= 1, gamma=0.95)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size= 1, gamma=0.93)
 
     print('loaded datasets, starting training')
 
@@ -143,8 +143,6 @@ def train():
             vel_enc = torch.unsqueeze(vel0, 2)
             accel = pr_vel1 - vel_enc[...,-1,:]
             U = calc_u(sigma0)
-            print(U)
-
             inputs = (pos_enc, vel_enc,
                       pr_pos1, pr_vel1,
                       accel, U,
@@ -158,7 +156,7 @@ def train():
             
             sigma0 = sigma0 + calc_sigma_edit(pr_m1)
             
-            print(pr_pos1[:, :5]-gt_pos1[:, :5])
+            #print(pr_pos1[:, :5]-gt_pos1[:, :5])
             losses += loss_f(pr_pos1, gt_pos1, sigma0, batch['man_mask'].squeeze(-1))
 
         total_loss = torch.sum(losses, axis=0) / (train_window)
@@ -205,11 +203,9 @@ def train():
             else:
                 current_loss.backward()
                 optimizer.step()
-                #print(model.state_dict())
                 sub_idx = 0
             del batch_tensor
 
-            print('backwards done')
             epoch_train_loss += float(current_loss)
 
             # test todo
@@ -329,8 +325,6 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         sigma0 = calc_sigma_edit(m0)
         umask = batch['man_mask'].expand((batch_size, num_particles,4)).reshape(batch_size, num_particles,2,2)
         U = calc_u(sigma0) #* umask
-
-        print(U.shape, batch['man_mask'].shape)
         
         inputs = ([
             batch['pos_enc'], batch['vel_enc'], 
@@ -343,9 +337,6 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         gt_pos1 = batch['pos1']
         
         sigma0 = sigma0 + calc_sigma_edit(pr_m1)
-        print('prm1', pr_m1[0,0])
-        print('calc sigma prm1', calc_sigma_edit(pr_m1)[0,0])
-        print('sigma',sigma0[0,0])
         losses = loss_f(pr_pos1, gt_pos1, sigma0, batch['man_mask'].squeeze(-1))
         
         pr_agent, gt_agent, sigma_agent = pr_pos1[:,0], gt_pos1[:,0], sigma0[:,0]
@@ -385,9 +376,6 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
             losses += loss_f(pr_pos1, gt_pos1, sigma0, batch['man_mask'].squeeze(-1))
 
             pr_agent, gt_agent, sigma_agent = pr_pos1[:,0], gt_pos1[:,0], sigma0[:,0]
-            print("======================== val ===========================")
-            print(pr_agent, gt_agent)
-
 
             p = torch.distributions.MultivariateNormal(pr_agent[:, :2], sigma_agent.reshape(sigma_agent.shape[0],2,2))
             sample = p.sample(sample_shape=(6,))
@@ -405,9 +393,8 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
 
         for idx, scene_id in enumerate(scenes):
             prediction_gt[scene_id] = (predict_result[0][idx], predict_result[1][idx], 
-                                       predict_result[2][idx],predict_result[3][:,:,idx])
+                                       predict_result[2][idx], predict_result[3][:,:,idx])
     
-    #print('predgt', prediction_gt)
     total_loss = torch.sum(losses,axis=0) / (train_window) 
     
     result = {}
@@ -453,6 +440,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     result['ADE_std'] = np.std(ade)
     result['coverage'] = np.mean(acoverage)
     result['mis'] = np.mean(amis)
+    result['nll'] = np.mean(anll)
 
     fdes = []
     for k, v in de.items():
@@ -496,8 +484,8 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
 if __name__ == '__main__':
     if args.train:
         # debug 大法好
-        with torch.autograd.detect_anomaly():
-            train()
+        #with torch.autograd.detect_anomaly():
+        train()
     
     if args.evaluation:
         evaluation()

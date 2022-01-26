@@ -36,6 +36,7 @@ parser.add_argument('--val_batches', default=60, type=int,
 parser.add_argument('--val_batch_size', default=4, type=int)
 parser.add_argument('--train', default=False, action='store_true')
 parser.add_argument('--evaluation', default=False, action='store_true')
+parser.add_argument('--load_model_path', default='', type=str, help='path to model to be loaded')
 
 feature_parser = parser.add_mutually_exclusive_group(required=False)
 feature_parser.add_argument('--rho1', dest='representation', action='store_false')
@@ -57,7 +58,7 @@ def create_model():
     if args.representation:
         from models.rho_reg_ECCO_original import ECCONetwork
         """Returns an instance of the network for training and evaluation"""
-        model = model = ECCONetwork(radius_scale = 40, 
+        model = ECCONetwork(radius_scale = 40, 
                                     layer_channels = [8, 16, 8, 8, 1], 
                                     encoder_hidden_size=18)
     else:
@@ -87,8 +88,12 @@ def train():
                             repeat=True, shuffle=True, max_lane_nodes=900)
 
     data_iter = iter(dataset)   
-    
-    model = create_model().to(device)
+    if args.load_model_path:
+        print('loading model from ' + args.load_model_path)
+        model_ = torch.load(args.load_model_path + '.pth')
+        model = model_
+    else:
+        model = create_model().to(device)
     # model_ = torch.load(model_name + '.pth')
     # model = model_
     model = MyDataParallel(model)
@@ -377,8 +382,11 @@ def evaluate(model, val_dataset, train_window=3, max_iter=2500, device='cpu', st
         for idx, scene_id in enumerate(scenes):
             prediction_gt[scene_id] = (predict_result[0][idx], predict_result[1][idx])
     
-    total_loss = 128 * torch.sum(torch.stack(losses),axis=0) / max_iter
-    
+    try:
+        total_loss = torch.sum(torch.stack(losses),axis=0) / max_iter
+    except:
+        total_loss = 0
+        
     result = {}
     de = {}
     

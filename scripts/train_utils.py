@@ -65,7 +65,7 @@ def calc_sigma_edit(M):
     expM = torch.matrix_exp(M)
     expMT = torch.matrix_exp(torch.transpose(M,-2,-1))
     sigma = torch.einsum('...xy,...yz->...xz', expM, expMT)
-    return 0.1*sigma
+    return 0.1*sigma #for argoverse 0.1, for ped 1.5
 
 def calc_sigma(M):
     M = torch.tanh(M)
@@ -73,19 +73,26 @@ def calc_sigma(M):
     expMT = torch.matrix_exp(torch.transpose(M,-2,-1))
     sigma = torch.einsum('...xy,...yz->...xz', expM, expMT)
     # here sigma[0,0] ranges from 0.13 to 27.7
-    sigma_scaled = 0.8*sigma #for argoverse 0.5, for ped 0.8
+    sigma_scaled = 0.5*sigma 
     return sigma_scaled
 
 def calc_u(sigma):
+    device = sigma.device
+    eps=1e-6
+    r1 = torch.empty(*sigma.shape[:-2],device=device).random_(2)
+    rsum = torch.ones_like(r1,device=device)
+    r0 = rsum-r1
+    rz = torch.zeros_like(r1.unsqueeze(-1),device=device)
+    mask = torch.cat([r1.unsqueeze(-1),rz,rz,r0.unsqueeze(-1)], axis=-1).reshape(sigma.shape[0],sigma.shape[1],2,2)
+    sigma = sigma + eps*mask
     L, V = torch.linalg.eigh(sigma)
-    #print('v', V)
-    #print('L', L)
     U = V @ torch.diag_embed(L.pow(0.5))
     return U
 
 def nll(pr_pos, gt_pos, pred_m, car_mask=1):
     sigma = calc_sigma(pred_m)
-
+    eps = 1e-6
+    sigma = sigma + eps * torch.ones_like(sigma, device = sigma.device)
     loss = 0.5 * quadratic_func(gt_pos - pr_pos[...,:2], sigma.inverse()) \
         + torch.log(2 * 3.1416 * torch.pow(sigma.det(), 0.5))
     return torch.mean(loss * car_mask)
@@ -182,7 +189,7 @@ def process_batch(batch, device, train_window = 30):
     # batch sigmas: starting with two zero 2x2 matrices
     batch_tensor['scene_idx'] = batch['scene_idx']
     batch_tensor['city'] = batch['city']
-    batch_tensor['sigmas'] = torch.zeros(batch_size, 60, 4, 2).to(device)
+    batch_tensor['sigmas'] = torch.zeros(batch_size, 60, 4, 2).to(device) # for pecco change this back to 60, 2, 2
     #batch_tensor
     return batch_tensor
 

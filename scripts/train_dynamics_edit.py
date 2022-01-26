@@ -103,7 +103,7 @@ def train():
 
     model = MyDataParallel(model)
     optimizer = torch.optim.Adam(model.parameters(), args.base_lr,betas=(0.9, 0.999), weight_decay=4e-4)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size= 1, gamma=0.95)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size= 1, gamma=0.93)
 
     print('loaded datasets, starting training')
 
@@ -215,10 +215,15 @@ def train():
         with torch.no_grad():
             print('loading validation dataset')
             val_dataset = read_pkl_data(val_path, batch_size=args.val_batch_size, shuffle=False, repeat=False)
-            valid_total_loss, _, _ = evaluate(model.module, val_dataset, loss_f, train_window=args.val_window,
+            valid_total_loss, _, result = evaluate(model.module, val_dataset, loss_f, train_window=args.val_window,
                                                     max_iter=args.val_batches,
                                                     device=device, use_lane=args.use_lane,
                                                     batch_size=args.val_batch_size)
+            for k,v in result.items():
+                writer.add_scalar(k, v, i)
+            
+            num_samples = batches_per_epoch * args.batch_divide * args.batch_size
+            writer.add_scalar('MRS', result['mrs'], num_samples)
 
 
         valid_losses.append(float(valid_total_loss))
