@@ -164,7 +164,19 @@ def train():
     valid_metrics_list = []
     min_loss = None
 
-    #---
+
+    # first eval
+    model.eval()
+    with torch.no_grad():
+        print('loading validation dataset')
+        val_dataset = read_pkl_data(val_path, batch_size=args.val_batch_size, shuffle=False, repeat=False)
+        valid_total_loss, _, result = evaluate(model.module, val_dataset, loss_f, train_window=args.val_window,
+                                                max_iter=args.val_batches,
+                                                device=device, use_lane=args.use_lane,
+                                                batch_size=args.val_batch_size)
+        num_samples = 0
+        writer.add_scalar('MRS', result['mis'], num_samples)
+
     for i in range(epochs):
         print("training ... epoch " + str(i + 1))#, end='', flush=True)
         epoch_start_time = time.time()
@@ -222,8 +234,8 @@ def train():
             for k,v in result.items():
                 writer.add_scalar(k, v, i)
             
-            num_samples = batches_per_epoch * args.batch_divide * args.batch_size
-            writer.add_scalar('MRS', result['mrs'], num_samples)
+            num_samples = i * batches_per_epoch * args.batch_size
+            writer.add_scalar('MRS', result['mis'], num_samples)
 
 
         valid_losses.append(float(valid_total_loss))

@@ -671,6 +671,71 @@ def full_norm(df: np.array, args) -> np.ndarray:
     #df["ROTATION"] = rotation
     return normalize_traj_arr
 
+def full_norm_reversible(df: np.array, args) -> np.ndarray:
+    """Normalize trajectory such that it starts at (0,0) and observed part ends on x-axis.
+
+    Args:
+        df (pandas Dataframe): Data for all the tracks
+        args: Arguments passed to the baseline code
+    Returns:
+        normalize_traj_arr (numpy array): Array of shape (num_tracks x seq_len x 2)
+                                          containing normalized trajectory
+    Note:
+        This also updates the dataframe in-place.
+
+    """
+    # Transformation values will be saved in df
+    translation = []
+    rotation = []
+
+    normalized_traj = []
+    x_coord_seq = df[:,:,0]
+    y_coord_seq = df[:,:,1]
+
+    # Normalize each trajectory
+    for i in range(x_coord_seq.shape[0]):
+        xy_seq = np.stack((x_coord_seq[i], y_coord_seq[i]), axis=-1)
+
+        start = xy_seq[0]
+
+        # First apply translation
+        m = [1, 0, 0, 1, -start[0], -start[1]]
+        ls = LineString(xy_seq)
+
+
+        # Now apply rotation, taking care of edge cases
+        ls_offset = affine_transform(ls, m)
+
+        end = ls_offset.coords[args.obs_len - 1]
+        if end[0] == 0 and end[1] == 0:
+            angle = 0.0
+        elif end[0] == 0:
+            angle = -90.0 if end[1] > 0 else 90.0
+        elif end[1] == 0:
+            angle = 0.0 if end[0] > 0 else 180.0
+        else:
+            angle = math.degrees(math.atan(end[1] / end[0]))
+            if (end[0] > 0 and end[1] > 0) or (end[0] > 0 and end[1] < 0):
+                angle = -angle
+            else:
+                angle = 180.0 - angle
+
+        # Rotate the trajetory
+        ls_rotate = rotate(ls_offset, angle, origin=(0, 0)).coords[:]
+
+        # Normalized trajectory
+        norm_xy = np.array(ls_rotate)
+
+        # Update the containers
+        normalized_traj.append(norm_xy)
+        translation.append(m)
+        rotation.append(angle)
+
+    # Update the dataframe and return the normalized trajectory
+    normalize_traj_arr = np.stack(normalized_traj)
+    #df["TRANSLATION"] = translation
+    #df["ROTATION"] = rotation
+    return normalize_traj_arr, (translation,rotation)
 
 def normalized_to_map_coordinates(coords: np.ndarray,
                                   translation: List[List[float]],

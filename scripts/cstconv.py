@@ -182,16 +182,19 @@ def train():
     valid_losses = []
     valid_metrics_list = []
     min_loss = None
-    '''
-    with torch.profiler.profile(schedule=torch.profiler.schedule(
-            wait=2,
-            warmup=2,
-            active=6,
-            repeat=1),
-        on_trace_ready=torch.profiler.tensorboard_trace_handler(log_dir),
-        with_stack=True
-    ) as profiler:
-    '''
+
+    # first eval
+    model.eval()
+    with torch.no_grad():
+        print('loading validation dataset')
+        val_dataset = read_pkl_data(val_path, batch_size=args.val_batch_size, shuffle=False, repeat=False)
+        valid_total_loss, _, result = evaluate(model.module, val_dataset, loss_f, train_window=args.val_window,
+                                                max_iter=args.val_batches,
+                                                device=device, use_lane=args.use_lane,
+                                                batch_size=args.val_batch_size)
+        num_samples = 0
+        writer.add_scalar('MRS', result['mis'], num_samples)
+
     for i in range(epochs):
         print("training ... epoch " + str(i + 1), end='', flush=True)
         epoch_start_time = time.time()
@@ -245,10 +248,17 @@ def train():
         with torch.no_grad():
             print('loading validation dataset')
             val_dataset = read_pkl_data(val_path, batch_size=args.val_batch_size, shuffle=False, repeat=False)
-            valid_total_loss, _ = evaluate(model.module, val_dataset, loss_f, train_window=args.val_window,
+            valid_total_loss, _, result = evaluate(model.module, val_dataset, loss_f, train_window=args.val_window,
                                                     max_iter=args.val_batches, 
                                                     device=device, use_lane=args.use_lane, 
                                                     batch_size=args.val_batch_size)
+            
+            for k,v in result.items():
+                writer.add_scalar(k, v, i)
+            
+            num_samples = i * batches_per_epoch * args.batch_size
+            writer.add_scalar('MRS', result['mis'], num_samples)
+
 
 
         valid_losses.append(float(valid_total_loss))
@@ -514,7 +524,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     print(result)
     print('done')
 
-    return total_loss, prediction_gt
+    return total_loss, prediction_gt, result
 
 
 
