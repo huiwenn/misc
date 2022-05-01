@@ -16,6 +16,20 @@ def get_agent(pr: object, gt: object, pr_id: object, gt_id: object, agent_id: ob
     return torch.cat([pr_agent, pr_m_agent], dim=-1), gt_agent
 
 
+
+def get_agent_multi(pr, gt, pr_id, gt_id, agent_id,  pr_m1, p, device = 'cpu',) -> object: # only works for batch size 1
+    agent_id = np.expand_dims(agent_id, 1)
+
+    pr_agent = pr[pr_id == agent_id, :]
+    gt_agent = gt[gt_id == agent_id, :]
+
+    pr_m_agent = torch.flatten(pr_m1[pr_id == agent_id, :], start_dim=-2, end_dim=-1)
+    print('pagent', p.shape)
+    p_agent = p[gt_id == agent_id,:]
+
+    return torch.cat([pr_agent, pr_m_agent], dim=-1), gt_agent, p_agent
+
+
 def euclidean_distance(a, b, epsilon=1e-9, mask=1):
     return torch.sqrt(torch.sum((a - b)**2, axis=-1)*mask + epsilon)
 
@@ -67,6 +81,15 @@ def calc_sigma_edit(M):
     sigma = torch.einsum('...xy,...yz->...xz', expM, expMT)
     return 0.1*sigma #for argoverse 0.1, for ped 1.5
 
+def calc_sigma_multi(Ms):   
+    modes = Ms.shape[-2]//2
+    sigmas = []
+    for i in range(modes):
+        M = Ms[:,:,i*2:i*2+2,:]
+        sig = calc_sigma_edit(M)
+        sigmas.apend(sig)
+    return sigmas
+
 def calc_sigma(M):
     M = torch.tanh(M)
     expM = torch.matrix_exp(M)
@@ -89,6 +112,15 @@ def calc_u(sigma):
     U = V @ torch.diag_embed(L.pow(0.5))
     return U
 
+def calc_u_multi(sigmas):   
+    modes = sigmas.shape[-2]//2
+    Us = []
+    for i in range(modes):
+        M = sigmas[:,:,i*2:i*2+2,:]
+        U = calc_u(M)
+        Us.apend(U)
+    return U
+
 def nll(pr_pos, gt_pos, pred_m, car_mask=1):
     sigma = calc_sigma(pred_m)
     eps = 1e-6
@@ -97,11 +129,19 @@ def nll(pr_pos, gt_pos, pred_m, car_mask=1):
         + torch.log(2 * 3.1416 * torch.pow(sigma.det(), 0.5))
     return torch.mean(loss * car_mask)
 
-def nll_dyna(pr_pos, gt_pos, sigma, car_mask=1):
+def nll_dyna(pr_pos, gt_pos, sigma, car_mask=1, prob=1):
     loss = 0.5 * quadratic_func(gt_pos - pr_pos[...,:2], sigma.inverse()) \
         + torch.log(2 * 3.1416 * torch.pow(sigma.det(), 0.5))
-    return torch.mean(loss * car_mask)
+    return torch.mean(loss * car_mask * prob)
 
+def nll_multimodal_dyna(output, gt_pos, car_mask=1):
+    print(output.shape) #batch, car, output, 2
+    modes = output.shape[2] // 4
+    weighted_loss=0
+    for m in mode:
+        pr_pos, sigma, weight = output[:,:, m,:] 
+        weighted_loss += weight[0] * nll_dyna(pr_pos, gt_pos, sigma, car_mask=1)
+    return weighted_loss
 
 def get_coverage(pr_pos, gt_pos, pred_m, rho = 0.9, sigma_ready=False):
     if sigma_ready:
@@ -113,6 +153,29 @@ def get_coverage(pr_pos, gt_pos, pred_m, rho = 0.9, sigma_ready=False):
     contour = - 2 * torch.log(torch.tensor(1.0, device=dist.device)-rho)
     cover = torch.where(dist < contour, torch.ones(dist.shape, device=dist.device), torch.zeros(dist.shape, device=dist.device))
     return cover    
+
+def sample(pos, sigma, k):
+    """
+    Samples from the model.
+    args: 
+        n:          int
+    returns:
+        x:          torch.Tensor (n, d)
+        y:          torch.Tensor (n)
+    """
+    n = len(pos)
+    counts = torch.distributions.multinomial.Multinomial(total_count=n, probs=self.pi.squeeze()).sample()
+    x = torch.empty(0, device=counts.device)
+    y = torch.cat([torch.full([int(sample)], j, device=counts.device) for j, sample in enumerate(counts)])
+
+    # Only iterate over components with non-zero counts
+    for k in np.arange(self.n_components)[counts > 0]: 
+        d_k = torch.distributions.multivariate_normal.MultivariateNormal(self.mu[0, k], self.var[0, k])
+        x_k = torch.stack([d_k.sample() for _ in range(int(counts[k]))])
+
+        x = torch.cat((x, x_k), dim=0)
+
+    return x, y
 
 def clean_cache(device):
     if device == torch.device('cuda'):
@@ -250,3 +313,4 @@ def process_batch_ped_2d(batch, device, train_window = 12, train_particle_num=40
     # accel = torch.zeros(batch_size, 1, 2).to(device)
     batch_tensor['accel'] = accel
     return batch_tensor
+

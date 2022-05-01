@@ -297,7 +297,8 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
              batch_size=32):
 
     print('evaluating.. ', end='', flush=True)
-        
+    
+    k_samples = 20
     count = 0
     prediction_gt = {}
     losses = 0
@@ -343,7 +344,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         
 
         p = torch.distributions.MultivariateNormal(pr_agent[:, :2], sigma_agent.reshape(sigma_agent.shape[0],2,2))
-        sample = p.sample(sample_shape=(6,))
+        sample = p.sample(sample_shape=(k_samples,))
 
         samples.append(sample.unsqueeze(1).detach().cpu())
         sigmas.append(sigma_agent.unsqueeze(1).detach().cpu())
@@ -378,7 +379,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
             pr_agent, gt_agent, sigma_agent = pr_pos1[:,0], gt_pos1[:,0], sigma0[:,0]
 
             p = torch.distributions.MultivariateNormal(pr_agent[:, :2], sigma_agent.reshape(sigma_agent.shape[0],2,2))
-            sample = p.sample(sample_shape=(6,))
+            sample = p.sample(sample_shape=(k_samples,))
 
             samples.append(sample.unsqueeze(1).detach().cpu())
             sigmas.append(sigma_agent.unsqueeze(1).detach().cpu())
@@ -406,7 +407,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
 
     for k, v in prediction_gt.items():
         samples = v[3]
-        gt_expand = v[1].repeat((6, 1, 1))
+        gt_expand = v[1].repeat((k_samples, 1, 1))
         allde = torch.sqrt((samples[:,:,0] - gt_expand[:,:,0])**2 + (samples[:,:,1] - gt_expand[:,:,1])**2)
         minde[k] = torch.min(allde, 0).values.numpy()
 
@@ -420,6 +421,10 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     ade = []
     for k, v in de.items():
         ade.append(np.mean(v.numpy()))
+    
+    fde = []
+    for k, v in de.items():
+        ade.append(v.numpy()[-1])
     
     acoverage = []
     for k, v in coverage.items():
@@ -435,6 +440,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
 
     result['loss'] = total_loss.detach().cpu().numpy()
     result['ADE'] = np.mean(ade)
+    result['FDE'] = np.mean(fde)
     result['minADE'] = np.mean(list(minde.values()))
     result['minFDE'] = np.mean(np.array(list(minde.values()))[:,-1])
     result['ADE_std'] = np.std(ade)

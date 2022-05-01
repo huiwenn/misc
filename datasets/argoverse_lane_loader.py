@@ -18,6 +18,7 @@ class ArgoverseDataset(IterableDataset):
         self.rotate = rotate
         self.cannon = cannon
         self.pkl_list = glob(os.path.join(self.data_path, '*'))
+
         if shuffle:
             np.random.shuffle(self.pkl_list)
         else:

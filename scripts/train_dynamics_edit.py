@@ -56,7 +56,8 @@ def create_model():
         
         model = ECCONetwork(radius_scale = 40,
                             layer_channels = [8, 16, 16, 16, 3], #[8, 24, 24, 24, 3], #[16, 32, 32, 32, 3], 
-                            encoder_hidden_size=21)
+                            encoder_hidden_size=21,
+                            correction_scale=72)
     else:
         from models.rho1_ECCO import ECCONetwork
         """Returns an instance of the network for training and evaluation"""
@@ -109,13 +110,13 @@ def train():
 
     def train_one_batch(model, batch, loss_f, train_window=2):
 
-        batch_size = args.batch_size
+        batch_size =  batch['pos_2s'].shape[0]
         if not args.use_lane:
             batch['lane'] = torch.zeros(batch_size, 1, 2, device=device)
             batch['lane_norm'] = torch.zeros(batch_size, 1, 2, device=device)
             batch['lane_mask'] = torch.ones(batch_size, 1, 1, device=device)
 
-        m0 = -5*torch.eye(2, device=device).reshape((1,2,2)).repeat((batch_size//args.batch_divide, 60, 1, 1))
+        m0 = -5*torch.eye(2, device=device).reshape((1,2,2)).repeat((batch_size, 60, 1, 1))
         sigma0 = calc_sigma_edit(m0)
         U = calc_u(sigma0)
         inputs = ([
@@ -127,6 +128,7 @@ def train():
         ])
     
         pr_pos1, pr_vel1, pr_m1, states = model(inputs)
+        # pr_m1: batch_size x num_vehicles x 2 x 2
         sigma0 = sigma0 + calc_sigma_edit(pr_m1)
         gt_pos1 = batch['pos1']
 
@@ -164,12 +166,11 @@ def train():
     valid_metrics_list = []
     min_loss = None
 
-
     # first eval
     model.eval()
     with torch.no_grad():
         print('loading validation dataset')
-        val_dataset = read_pkl_data(val_path, batch_size=args.val_batch_size, shuffle=False, repeat=False)
+        val_dataset = read_pkl_data(val_path, batch_size=args.val_batch_size, shuffle=False, repeat=True)
         valid_total_loss, _, result = evaluate(model.module, val_dataset, loss_f, train_window=args.val_window,
                                                 max_iter=args.val_batches,
                                                 device=device, use_lane=args.use_lane,
@@ -307,10 +308,13 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
              batch_size=32):
     
     print('evaluating.. ', end='', flush=True)
-        
+    
+    
+    sample_k = 6
     count = 0
     prediction_gt = {}
     losses = 0
+    
     for i, sample in enumerate(val_dataset):
         if i >= max_iter:
             break
@@ -329,6 +333,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         count += 1
 
         data = process_batch(sample, device)
+        batch_size = data['pos_2s'].shape[0]
 
         if use_lane:
             pass
@@ -356,6 +361,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
             data['lane'], data['lane_norm'], 
             data['car_mask'], data['lane_mask']
         ])
+        print(inputs)
 
         pr_pos1, pr_vel1, pr_m1, states = model(inputs)
 
@@ -374,7 +380,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     
         p = torch.distributions.MultivariateNormal(pr_agent[:, :2], pr_agent[:, 2:].reshape(pr_agent.shape[0],2,2))
         #print('batchsape', p.batch_shape) # should be general batch size
-        sample = p.sample(sample_shape=(6,))
+        sample = p.sample(sample_shape=(sample_k,))
         #print('sample',sample.shape) #[6,batch_shape,2]
 
         samples.append(sample.unsqueeze(1).detach().cpu())
@@ -413,12 +419,14 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
                                            agent_id, device, pr_m1=sigma0)
             
             p = torch.distributions.MultivariateNormal(pr_agent[:, :2], pr_agent[:, 2:].reshape(pr_agent.shape[0],2,2))
-            sample = p.sample(sample_shape=(6,))
+            sample = p.sample(sample_shape=(sample_k,))
             
             samples.append(sample.unsqueeze(1).detach().cpu())
             pred.append(pr_agent.unsqueeze(1).detach().cpu())
             gt.append(gt_agent.unsqueeze(1).detach().cpu())
-
+            #print('pr', pr_agent)
+            #print('gt', gt_agent)
+            #print('sample',sample)
             #clean_cache(device)
         
         predict_result = (torch.cat(pred, axis=1), torch.cat(gt, axis=1), torch.cat(samples,axis=1))
@@ -436,8 +444,12 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
 
     for k, v in prediction_gt.items():
         samples = v[2]
-        gt_expand = v[1].repeat((6, 1, 1))
+        gt_expand = v[1].repeat((sample_k, 1, 1))
         allde = torch.sqrt((samples[:,:,0] - gt_expand[:,:,0])**2 + (samples[:,:,1] - gt_expand[:,:,1])**2)
+        minde_ = torch.min(allde, 0).values.numpy()
+        
+        #if (minde_ >10).any():
+        #    continue
         minde[k] = torch.min(allde, 0).values.numpy()
 
         de[k] = torch.sqrt((v[0][:,0] - v[1][:,0])**2 + (v[0][:,1] - v[1][:,1])**2)
@@ -449,6 +461,10 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     ade = []
     for k, v in de.items():
         ade.append(np.mean(v.numpy()))
+    
+    fde = []
+    for k, v in de.items():
+        fde.append(v.numpy()[-1])
     
     acoverage = []
     for k, v in coverage.items():
@@ -464,6 +480,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
 
     result['loss'] = total_loss.detach().cpu().numpy()
     result['ADE'] = np.mean(ade)
+    result['FDE'] = np.mean(fde)
     result['minADE'] = np.mean(list(minde.values()))
     result['minFDE'] = np.mean(np.array(list(minde.values()))[:,-1])
     result['ADE_std'] = np.std(ade)
@@ -503,6 +520,8 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
 
     return total_loss, prediction_gt, result
 
+
+
         
 if __name__ == '__main__':
 
@@ -522,6 +541,7 @@ if __name__ == '__main__':
     if args.train:
         # debug 大法好
         # with torch.autograd.detect_anomaly():
+        
         train()
     
     if args.evaluation:

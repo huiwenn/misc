@@ -1,3 +1,5 @@
+scripts/competition_files/*
+scripts/test_results_temp/*
 *.DS_Store
 scripts/vis.ipynb 
 *.ipynb_checkpoints/

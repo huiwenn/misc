@@ -28,9 +28,6 @@ class EquiLinearRegToReg(nn.Module):
         super(EquiLinearRegToReg, self).__init__()
         self.k = k
         self.weights = nn.parameter.Parameter(torch.rand(in_features, out_features, k) / in_features)
-        # print(self.weights)
-        # kernel = self.update_kernel()
-        # print(self.kernel)
     
     def update_kernel(self):
             # i or -i ???   stack -2 or -1 ???   torch.flip ???
@@ -99,3 +96,36 @@ class EquiLinearRegToRho1(nn.Module):
            This is a fourier transform. 
         '''
         return torch.einsum('yx,...x->...y',self.RegToRho1, field_feat)
+
+
+# Reg --> matrice
+class EquiLinearRegToMat(nn.Module):
+    def __init__(self, k):
+        super(EquiLinearRegToMat, self).__init__()
+        self.k = k
+
+        def rotmat(phi):
+            phi= torch.tensor(phi,requires_grad=False)
+            s = torch.sin(phi)
+            c = torch.cos(phi)
+            rot = torch.stack([torch.stack([c, -s]),
+                            torch.stack([s, c])])
+            return rot
+
+        self.rot1 = torch.stack([rotmat(i * 2 * math.pi / self.k) for i in range(k)])
+        self.rot2 = torch.stack([rotmat(i * 2 * math.pi / self.k).T for i in range(k)])
+
+        M = nn.parameter.Parameter(torch.rand(2,2))
+        self.register_buffer('M', M)
+    
+    def forward(self, field_feat):
+        '''
+           k: int -- number of slices of the circle for regular rep
+           inputs:
+               @field_feat: [batch, num_part, in_feat, k]
+           output: 
+               retval:      [batch, num_part, in_feat, 2, 2]
+        
+        F(f) = \sum_{i=0}^{n-1} f_i rho_1(i2\pi/n) M rho_1(-i2\pi/n).
+        '''
+        return torch.einsum('...k, kij, jl, klm -> ...im', field_feat, self.rot1, self.M, self.rot2)

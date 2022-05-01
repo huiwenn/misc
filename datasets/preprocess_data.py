@@ -251,6 +251,20 @@ if __name__ == '__main__':
     at_train = ArgoverseTest(os.path.join(dataset_path, 'train', 'data'), max_car_num=60)
     at_val = ArgoverseTest(os.path.join(dataset_path, 'val', 'data'), max_car_num=60)
     
+    print("++++++++++++++++++++ test ++++++++++++++++++++")
+    train_num = len(afl_train)
+    batch_start = time.time()
+    os.mkdir(os.path.join(dataset_path, 'test'))
+    for i, scene in enumerate(range(train_num)):
+        if i % 1000 == 0:
+            batch_end = time.time()
+            print("SAVED ============= {} / {} ....... {}".format(i, train_num, batch_end - batch_start))
+            batch_start = time.time()
+
+        data = {k:[v] for k, v in at_train.get_feat(scene).items()}
+        datas = process_func(putil, data, am)
+        with open(os.path.join(dataset_path, 'train/lane_data', str(datas['scene_idx'][0])+'.pkl'), 'wb') as f:
+            pickle.dump(datas, f)
     
     print("++++++++++++++++++++ START TRAIN ++++++++++++++++++++")
     train_num = len(afl_train)

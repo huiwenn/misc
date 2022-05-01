@@ -168,9 +168,10 @@ class EquiCtsConvBase(nn.Module, metaclass=ABCMeta):
         # kernel_on_field: [batch, num_m, num_n, c_out, c_in, 2, 2]
         
         if self.use_attention:
-            # print(relative_field.shape)
-            # print(field_mask.unsqueeze(1).shape)
+            #print('relative field', relative_field.shape)
+            #print('relative field_mask', field_mask.unsqueeze(1).shape)
             attention = self.GetAttention(relative_field) * field_mask.unsqueeze(1)
+            #print('Attention', attention.shape)
             # attention: [batch, num_m, num_n, 1]
 
             if self.normalize_attention:
@@ -208,6 +209,135 @@ class EquiCtsConvBase(nn.Module, metaclass=ABCMeta):
         )
         return out
     
+class EquiCtsConvBaseMat(EquiCtsConvBase):
+    def __init__(self):
+        super(EquiCtsConvBaseMat, self).__init__()
+    
+    def InterpolateKernelMat(self, kernel, pos):
+        """
+        @kernel: [c_out, c_in=feat_dim, r, theta, 2, 2] -> [batch, C=c_out*c_in*4, r, theta]
+        @pos: [batch, num_m, num_n, 2] -> [batch, num_m, num_n, 2]
+        
+        return out: [batch, C=c_out*c_in*4, num_m, num_n] -> [batch, num_m, num_n, c_out, c_in, 2, 2]
+        """
+        # torch.Size([32, 16, 4, 16, 2, 2, 8])
+
+        # kernel:  [c_out, c_in=feat_dim, r, theta, 2, 2, k]
+        kernels = kernel.permute(0, 1, 4, 5, 6, 2, 3)
+        # torch.Size([32, 16, 2, 2, 8, 4, 16])
+        # kernels: [c_out, c_in=feat_dim, 2, k, r, theta]
+        
+        kernels = kernels.reshape(-1, *kernels.shape[5:]).unsqueeze(0)
+        # kernels: [1, c_out*c_in*2*2*k, r, theta]
+        
+        kernels = kernels.expand((pos.shape[0], *kernels.shape[1:]))
+        # kernels: [batch_size, c_out*c_in*2*2*k, r, theta]
+                  #[N, C, H, W]
+        
+
+        # Copy first and last column to wrap thetas.
+        padded_kernels = torch.cat([
+            kernels[..., -1].unsqueeze(-1), 
+            kernels, 
+            kernels[..., 0].unsqueeze(-1)
+        ],dim = -1)
+        padded_kernels = padded_kernels.permute(0,1,3,2)
+        # padded_kernels: [batch, C=c_out*c_in*4*k, theta+2, r]
+        
+        
+        grid = pos
+        # adjust radii [0,1] -> [-1,1]
+        grid[...,0] = 2*grid[...,0] - 1
+        # adjust angles [-pi,pi] -> [-1,1]
+        grid[...,1] *= 1/math.pi
+        # shrink thetas slightly to account for padding
+        grid[...,1] *= self.num_theta / (self.num_theta + 2)
+        # grid [batch, num_m, num_n, 2]
+        #      [N, H_out, W_out, 2]
+        
+        # print("grid",grid)
+        # print("padded_kernels_shape [batch_size, c_out*c_in*2*2, theta+2, r]:",padded_kernels.shape)
+        #print("kernels",padded_kernels)
+        
+        out = F.grid_sample(padded_kernels, grid, padding_mode='zeros', 
+                            mode='bilinear', align_corners=False)  #bilinear
+        # out: [batch, C=c_out*c_in*4, num_m, num_n]
+        #      [N, C, H_out, W_out]
+        
+        out = out.permute(0, 2, 3, 1)
+        # out: [batch, num_m, num_n, C=c_out*c_in*4*k]
+        out = out.reshape(*pos.shape[:-1], *kernel.shape[0:2], *kernel.shape[-3:])
+        # out: [batch, num_m, num_n, c_out, c_in, 2, 2]     
+        return out
+
+    def ContinuousConvMat(
+        self, field, center, field_feat, 
+        field_mask, ctr_feat=None
+    ):
+        """
+        @kernel: [c_out, c_in=feat_dim, r, theta, 2, 2]
+        @field: [batch, num_n, pos_dim=2] -> [batch, 1, num_n, pos_dim]
+        @center: [batch, num_m, pos_dim=2] -> [batch, num_m, 1, pos_dim]
+        @field_feat: [batch, num_n, c_in=feat_dim, 2] -> [batch, 1, num_n, c_in, 2]
+        @ctr_feat: [batch, 1, feat_dim]
+        @field_mask: [batch, num_n, 1]
+        """
+        kernel = self.computeKernel()
+        
+        relative_field = (field.unsqueeze(1) - center.unsqueeze(2)) / self.radius
+        # relative_field: [batch, num_m, num_n, pos_dim]
+        
+
+        polar_field = self.PolarCoords(relative_field)
+        # polar_field: [batch, num_m, num_n, pos_dim]
+        
+        kernel_on_field = self.InterpolateKernelMat(kernel, polar_field)
+        # kernel_on_field: [batch, num_m, num_n, c_out, c_in, 2, 2]
+        
+        if self.use_attention: 
+            #print('relative field', relative_field.shape)
+            #print('relative field_mask', field_mask.unsqueeze(1).shape)
+            attention = self.GetAttention(relative_field) * field_mask.unsqueeze(1)
+            #print('Attention', attention.shape)
+
+            if self.normalize_attention:
+                psi = torch.sum(attention, axis=2).squeeze(-1)
+                psi[psi == 0.] = 1
+                psi = psi.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+            else:
+                psi = 1.0
+        else:
+            attention = torch.ones(*relative_field.shape[0:3],1)
+            
+            if self.normalize_attention:
+                psi = torch.sum(attention, axis=2).squeeze(-1)
+                psi[psi == 0.] = 1
+                psi = psi.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+            else:
+                psi = 1.0
+        
+
+        attention_field_feat = field_feat.unsqueeze(1)*attention.unsqueeze(-1)
+        # attention_field_feat: [batch, num_m, num_n, c_in, 2]
+        #print('kernel_on_field', kernel_on_field.shape, 'attention_field_feat', attention_field_feat.shape)
+
+        out = torch.einsum('bmnoiyzx,bmnix->bmoyz', kernel_on_field, attention_field_feat)
+        # out: [batch, num_m, c_out, 2, 2]
+        
+        return out / psi
+    
+    def forward(
+        self, field, center, field_feat, 
+        field_mask, ctr_feat=None
+    ):
+        out = self.ContinuousConvMat(
+            field, center, field_feat, field_mask, 
+            ctr_feat
+        )
+        return out
+
+
+             
 
 class EquiCtsConv2d(EquiCtsConvBase):
     def __init__(self, in_channels, out_channels, radius, num_radii, num_theta, matrix_dim=2, 
@@ -301,7 +431,8 @@ class EquiCtsConv2d(EquiCtsConvBase):
         C[:,0,0] = 1
         C[:,1,1] = 1
         return C
-            
+
+
 
 class EquiCtsConv2dRegToRho1(EquiCtsConvBase):
     def __init__(self, in_channels, out_channels, radius, num_radii, num_theta, k, matrix_dim=2, 
@@ -628,6 +759,135 @@ class EquiCtsConv2dRegToReg(EquiCtsConvBase):
         return C
             
 
+
+
+class EquiCtsConv2dRegToMat(EquiCtsConvBaseMat):
+    def __init__(self, in_channels, out_channels, radius, num_radii, num_theta, k, matrix_dim=2, 
+                 use_attention=True, normalize_attention=True):
+        super(EquiCtsConv2dRegToMat, self).__init__()
+        self.num_theta = num_theta
+        self.num_radii = num_radii
+        self.k = k
+
+        regToMat = EquiLinearRegToMat(k)
+        self.rot1 = regToMat.rot1
+        self.rot2 = regToMat.rot2
+        
+        kernel_basis_outer, kernel_bullseye = self.GenerateKernelBasis(num_radii, num_theta, matrix_dim)
+        self.register_buffer('kernel_basis_outer', kernel_basis_outer)
+        self.register_buffer('kernel_bullseye', kernel_bullseye)
+        
+        outer_weights = torch.rand(in_channels, out_channels, num_radii, matrix_dim, matrix_dim, k)
+        outer_weights -= 0.5
+        scale_norm = 1 / torch.sqrt(torch.tensor(in_channels, dtype=torch.float))
+        outer_weights *= 1 * scale_norm
+        self.outer_weights = torch.nn.parameter.Parameter(outer_weights)
+        
+        bullseye_weights = torch.rand(in_channels, out_channels,2,2)
+        bullseye_weights -= 0.5
+        bullseye_weights *= 1 * scale_norm
+        self.bullseye_weights = torch.nn.parameter.Parameter(bullseye_weights)
+        
+        self.radius = radius
+
+        self.use_attention = use_attention
+        self.normalize_attention = normalize_attention
+        
+    def computeKernel(self):
+        # print("[r, d, k, r, theta, d, d, k] ",self.kernel_basis.shape)
+        # print("[c_in,c_out, r, d,  k]", self.weights.shape)
+        
+        kernel = (torch.einsum('pabkrtilj,xypabk->yxrtilj',self.kernel_basis_outer, self.outer_weights) +
+                 torch.einsum('abrtilj,xyab->yxrtilj',self.kernel_bullseye,self.bullseye_weights))
+        return kernel
+    
+    def GenerateKernelBasis(self, r, theta, matrix_dim=2):
+        """
+        output: KB : [r+1, d^2, k, r+1, theta, d, d, k]  
+        KB_bullseye : 
+        """ 
+        d = matrix_dim
+        k = self.k
+        
+        KB_outer = torch.zeros(r, d,d, k, r+1, theta, d, d, k, requires_grad=False)
+        K_bullseye =  torch.zeros(d, d, r+1, theta, d, d, k, requires_grad=False)
+        for i in range(d):
+            for j in range(d):
+                K_bullseye[i,j] = self.GenerateKernelBullseyeElement(r+1, theta, i, j, d)
+        
+        for i1 in range(d):
+            for i2 in range(d):
+                for j in range(k):
+                    for r1 in range(0, r):
+                        KB_outer[r1, i1, i2, j] = self.GenerateKernelBasisElement(r+1, theta, i1, i2, j, r1+1, d) 
+                
+        return KB_outer, K_bullseye
+    
+    def GenerateKernelBasisElement(self, r, theta, i1, i2, j, r1, matrix_dim=2):
+        """
+        output: K: [r, theta, d, d, k]
+        """
+        d = matrix_dim
+        k = self.k
+        
+        K = torch.zeros(r, theta, d, d, k, requires_grad=False)
+        K[r1] = self.GenerateKernelBasisElementColumn(theta, i1, i2, j, d)
+        return K
+        
+    def GenerateKernelBasisElementColumn(self, theta, i1, i2, j, matrix_dim=2):
+        # d = matrix_dim
+        # 0 <= i,j <= d-1
+        # C = kernelcolumn: [theta, d, d, k]
+        # C[0,:,:] = 0
+        # C[0,i,j] = 1
+        # for k in range(1,theta):
+        #   C[k] = RotMat(k*2*pi/theta) * C[0] * RotMat(-k*2*pi/theta) 
+        # # K[g v] = g K[v] g^{-1}
+        d = matrix_dim
+        k = self.k
+        
+        C = torch.zeros(theta, d, d, k, requires_grad=False)
+        C[0, i1, i2, j] = 1
+        
+        for ind in range(1, theta):
+            theta_i = torch.tensor(ind*2*math.pi/theta)
+            # multiplying 4 matricies: 
+            # rot:  dxd
+            # c[0]: dxdxk
+            # rot^{-1}: dxd
+            # regrot: kxk 
+            C[ind] = torch.einsum('ab, bci, cd, ij -> adj', 
+                                    self.Rho1RotMat(theta_i),
+                                    C[0],
+                                    self.Rho1RotMat(-theta_i),
+                                    self.RegRotMat(-theta_i.numpy(), k)) 
+        return C
+    
+    def GenerateKernelBullseyeElement(self, r, theta, i, j, matrix_dim=2):
+        """
+        output: K: [r, theta, d, d, k]
+        """
+        d = matrix_dim
+        k = self.k
+        
+        K = torch.zeros(r, theta, d, d, k, requires_grad=False)
+        K[0] = self.GenerateKernelBullseyeElementColumn(theta, i, j, d)
+        return K
+    
+    def GenerateKernelBullseyeElementColumn(self, theta, i, j, matrix_dim=2):
+        d = matrix_dim
+        k = self.k
+
+        M = torch.zeros(d,d)
+        M[i,j] = 1
+        
+        regToMat = torch.einsum('kij, jl, klm -> imk', self.rot1, M, self.rot2)
+
+        C = torch.zeros(theta, d, d, k, requires_grad=False)
+        C[:] = regToMat
+        return C
+            
+        
 
 class RelEquiCtsConv2dRegToRho1(EquiCtsConv2dRegToRho1):
     

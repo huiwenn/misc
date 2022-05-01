@@ -23,7 +23,7 @@ class ECCONetwork(nn.Module):
                  timestep = 0.1,
                  encoder_hidden_size = 19, 
                  layer_channels = [8, 16, 16, 16, 1],
-                 correction_scale = 1,
+                 correction_scale = 128,
                  ):
         super(ECCONetwork, self).__init__()
         
@@ -36,7 +36,7 @@ class ECCONetwork(nn.Module):
         self.timestep = timestep
         self.layer_channels = layer_channels
         # self.filter_extent = np.float32(self.radius_scale * 6 * self.particle_radius)
-        
+        self.correction_scale = correction_scale
         self.encoder_hidden_size = encoder_hidden_size
         self.in_channel = self.encoder_hidden_size
         self.activation = F.relu
@@ -116,6 +116,7 @@ class ECCONetwork(nn.Module):
         p0, p1: the position of the particle before/after basic integration. """
         dt = self.timestep
         p_corrected = p1 + correction
+        #print(correction)
         v_corrected = (p_corrected - p0) / dt
         return p_corrected, v_corrected
 
@@ -126,11 +127,11 @@ class ECCONetwork(nn.Module):
             fluid_feats.append(other_feats)
         fluid_feats = torch.cat(fluid_feats, -2)
         # compute the correction by accumulating the output through the network layers
+       
         output_conv_fluid = self.conv_fluid(p, p, fluid_feats, fluid_mask)
         output_dense_fluid = self.dense_fluid(fluid_feats)
 
         output_conv_obstacle = self.conv_obstacle(box, p, box_feats.unsqueeze(-2), box_mask)
-        
         feats = torch.cat((output_conv_obstacle, output_conv_fluid, output_dense_fluid), -2)
         # self.outputs = [feats]
         output = feats
@@ -140,7 +141,6 @@ class ECCONetwork(nn.Module):
             # mags = (torch.sum(output**2,axis=-1) + 1e-6).unsqueeze(-1)
             # in_feats = output/mags * self.activation(mags - self.relu_shift)
             in_feats = self.activation(output)
-            # in_feats = output
             output_conv = conv(p, p, in_feats, fluid_mask)
             output_dense = dense(in_feats)
             
@@ -161,7 +161,12 @@ class ECCONetwork(nn.Module):
 
         # scale to better match the scale of the output distribution
         # scale in pecco is (1.0 / 128) 
-        self.pos_correction = (1.0 / 128) * output
+
+        # think about weight initialization?
+        # polynomial / exponential scaling?
+        # function of the dot product w/ past trajectories 
+        # angle and magnitude instead of absolute velocity vectors
+        self.pos_correction = (1.0 / 128) * output #(1.0 / self.correction_scale) * output
         #self.pos_correction = (1.0 / 4) * output
         #self.pos_correction[...,1:,:] = (1.0 / 8) * self.pos_correction[...,1:,:]
         #print(self.pos_correction) check scale of this
@@ -178,6 +183,7 @@ class ECCONetwork(nn.Module):
             if other_feats is None:
                 feats = v0_enc
             else:
+                #print(other_feats.shape, v0_enc.shape)
                 feats = torch.cat((other_feats, v0_enc), -2)
         else:
             if other_feats is None:
@@ -189,16 +195,14 @@ class ECCONetwork(nn.Module):
                 #print('v0_enc', v0_enc.shape)
                 feats = torch.cat((other_feats, states[0][...,1:,:], v0_enc), -2)
         
-        # a = (v0 - v0_enc[...,-1,:]) / self.timestep
+        a = (v0 - v0_enc[...,-1,:]) / self.timestep
         p1, v1 = self.update_pos_vel(p0, v0, a)
         
         pos_correction = self.compute_correction(p1, v1, feats, box, box_feats, fluid_mask, box_mask)
 
         # the 1st output channel is correction
-        # pos_correction.squeeze(-2))
         p_corrected, v_corrected = self.apply_correction(p0, p1, pos_correction[..., 0, :])
         m_matrix = pos_correction[..., 1:, :]
-
         # return output channels after the first one
         if other_feats is None:
             return p_corrected, v_corrected, m_matrix, (feats, None)
