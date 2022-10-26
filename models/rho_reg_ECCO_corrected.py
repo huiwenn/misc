@@ -136,7 +136,9 @@ class ECCONetwork(nn.Module):
             fluid_feats.append(other_feats)
         fluid_feats = torch.cat(fluid_feats, -2)
         # compute the correction by accumulating the output through the network layers
-       
+        # print('p', p.shape)
+        # print('feats', fluid_feats.shape)
+        # print('mask', fluid_mask.shape)
         output_conv_fluid = self.conv_fluid(p, p, fluid_feats, fluid_mask)
         output_dense_fluid = self.dense_fluid(fluid_feats)
 
@@ -167,7 +169,8 @@ class ECCONetwork(nn.Module):
         output_dense = self.last_dense(in_feats)
         output_mat = self.mat_output(p, p, in_feats, fluid_mask)
         output_pos =  (output_conv + output_dense)
-        self.pos_correction =(1.0 / 128) * torch.cat([output_pos, output_mat.squeeze(2)], dim=-2)
+        # before it's all 1.0/ 128
+        self.pos_correction = torch.cat([ (1.0 / 32) * output_pos, (1.0 / 128) * output_mat.squeeze(2)], dim=-2)
 
         # compute the number of fluid particle neighbors.
         # this info is used in the loss function during training.
@@ -187,6 +190,7 @@ class ECCONetwork(nn.Module):
         p0_enc, v0_enc, p0, v0, a, feats, box, box_feats
         v0_enc: [batch, num_part, timestamps, 2]
         Computes 1 simulation timestep"""
+        #print('all inputs', [i.device for i in inputs])
         p0_enc, v0_enc, p0, v0, a, other_feats, box, box_feats, fluid_mask, box_mask = inputs
 
         if states is None:
@@ -200,9 +204,6 @@ class ECCONetwork(nn.Module):
                 feats = v0_enc
                 feats = torch.cat((states[0][...,1:,:], feats), -2)
             else:
-                #print('other feats', other_feats.shape)
-                #print('states', len(states), states[0].shape)
-                #print('v0_enc', v0_enc.shape)
                 feats = torch.cat((other_feats, states[0][...,1:,:], v0_enc), -2)
         
         a = (v0 - v0_enc[...,-1,:]) / self.timestep
@@ -216,6 +217,6 @@ class ECCONetwork(nn.Module):
         # return output channels after the first one
         if other_feats is None:
             return p_corrected, v_corrected, m_matrix, (feats, None)
-        return p_corrected, v_corrected, m_matrix, (feats[..., other_feats.shape[-2]:,:], None)
+        return p_corrected, v_corrected, m_matrix, [feats[..., other_feats.shape[-2]:,:], None]
 
 

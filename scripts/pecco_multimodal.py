@@ -69,6 +69,8 @@ class MyDataParallel(torch.nn.DataParallel):
         except AttributeError:
             return getattr(self.module, name)
 
+
+
 def train():
     #am = ArgoverseMap()
     log_dir = "runs/" + model_name + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -85,11 +87,11 @@ def train():
         model_ = torch.load(args.load_model_path + '.pth')
         model = model_
     else:
-        model = create_model().to(device)
+        model = create_model()#.to(device)
     
-    loss_f = nll_dyna
+    loss_f = wta_loss
 
-    model = MyDataParallel(model)
+    #model = MyDataParallel(model)
     optimizer = torch.optim.Adam(model.parameters(), args.base_lr,betas=(0.9, 0.999), weight_decay=4e-4)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size= 1, gamma=0.93)
 
@@ -123,19 +125,24 @@ def train():
         pos0 = [batch['pos0'] for _ in range(args.modes)]
         vel0 = [batch['vel0'] for _ in range(args.modes)]
 
+        '''
         for m in range(args.modes):
             sigma0[m] = sigma0[m] + calc_sigma_edit(pr_m1[m])
             losses += loss_f(pr_pos1[m], gt_pos1, sigma0[m], batch['car_mask'].squeeze(-1), prob=p[...,m])
+        '''
+        losses += loss_f(pr_pos1, gt_pos1, sigma0, batch['car_mask'].squeeze(-1))
 
         for i in range(train_window-1):           
             for m in range(args.modes):
                 pos_enc = torch.unsqueeze(pos0[m], 2)
                 vel_enc = torch.unsqueeze(vel0[m], 2)
                 U = calc_u(sigma0[m])
-                inputs = (pos_enc, vel_enc, pr_pos1[m], pr_vel1[m], batch['accel'],
+                inputs = ([
+                        pos_enc, vel_enc, pr_pos1[m], pr_vel1[m], batch['accel'],
                         U, 
                         batch['lane'], batch['lane_norm'], 
-                        batch['car_mask'], batch['lane_mask'])
+                        batch['car_mask'], batch['lane_mask']
+                        ])
 
                 pos0[m], vel0[m] = pr_pos1[m], pr_vel1[m]
                 inputs_allmodes[m] = inputs
@@ -143,9 +150,14 @@ def train():
             pr_pos1, pr_vel1, pr_m1, states, p = model(inputs_allmodes, states=states)
             gt_pos1 = batch['pos'+str(i+2)]
             
+            losses += loss_f(pr_pos1, gt_pos1, sigma0, batch['car_mask'].squeeze(-1))
+
+            '''
             for m in range(args.modes):
                 sigma0[m] = sigma0[m] + calc_sigma_edit(pr_m1[m])
                 losses += loss_f(pr_pos1[m], gt_pos1, sigma0[m], batch['car_mask'].squeeze(-1),prob=p[...,m])
+
+            '''
             
         total_loss = torch.sum(losses, axis=0) / (train_window)
         return total_loss
@@ -164,7 +176,8 @@ def train():
     with torch.no_grad():
         print('loading validation dataset')
         val_dataset = read_pkl_data(val_path, batch_size=args.val_batch_size, shuffle=False, repeat=False)
-        valid_total_loss, _, result = evaluate(model.module, val_dataset, loss_f, train_window=args.val_window,
+        #model.module
+        valid_total_loss, _, result = evaluate(model, val_dataset, loss_f, train_window=args.val_window,
                                                 max_iter=args.val_batches,
                                                 device=device, use_lane=args.use_lane,
                                                 batch_size=args.val_batch_size)
@@ -221,7 +234,8 @@ def train():
         with torch.no_grad():
             print('loading validation dataset')
             val_dataset = read_pkl_data(val_path, batch_size=args.val_batch_size, shuffle=False, repeat=False)
-            valid_total_loss, _, result = evaluate(model.module, val_dataset, loss_f, train_window=args.val_window,
+            #model.module
+            valid_total_loss, _, result = evaluate(model, val_dataset, loss_f, train_window=args.val_window,
                                                     max_iter=args.val_batches,
                                                     device=device, use_lane=args.use_lane,
                                                     batch_size=args.val_batch_size)
@@ -240,7 +254,8 @@ def train():
             print('update weights')
             min_loss = valid_losses[-1]
             best_model = model
-            torch.save(model.module, model_name + ".pth")
+            #model.module
+            torch.save(model, model_name + ".pth")
 
         epoch_end_time = time.time()
 
@@ -347,6 +362,8 @@ def evaluate(model, val_dataset,loss_f, use_lane=False,
         gt_pos1 = batch['pos1']
         pos0 = [batch['pos0'] for _ in range(args.modes)]
         vel0 = [batch['vel0'] for _ in range(args.modes)]
+        
+        losses += loss_f(pr_pos1, gt_pos1, sigma0, batch['car_mask'].squeeze(-1))
 
         sample = []
         pr = []
@@ -355,21 +372,21 @@ def evaluate(model, val_dataset,loss_f, use_lane=False,
             sigma0[m] = sigma0[m] + calc_sigma_edit(pr_m1[m])
             #print(pr_pos1[m][:,:4], gt_pos1[:,:,:4][:,:4])
 
-            losses += loss_f(pr_pos1[m], gt_pos1, sigma0[m], batch['car_mask'].squeeze(-1),prob=p[...,m])
+            #losses += loss_f(pr_pos1[m], gt_pos1, sigma0[m], batch['car_mask'].squeeze(-1),prob=p[...,m])
             #print('pm', p[m].shape, p[m])
-            pr_agent, gt_agent, p_agent = get_agent_multi(pr_pos1[m], batch['pos1'],
+            pr_agent, gt_agent, p_agent = get_agent_multi(pr_pos1[m], gt_pos1,
                                     batch['track_id0'], batch['track_id1'], 
                                     agent_id, sigma0[m], p[..., m], device)
 
             distr = torch.distributions.MultivariateNormal(pr_agent[:, :2], pr_agent[:, 2:].reshape(batch_size,2,2))
             num_samp = int(np.around(p_agent.cpu().numpy()*6))
             sample.append(distr.sample(sample_shape=(num_samp,)))
-            pr.append(pr_agent.unsqueeze(1).detach().cpu()) #, p_agent.unsqueeze(1).detach().cpu()])
+            pr.append(pr_agent.unsqueeze(0).unsqueeze(0).detach().cpu()) #, p_agent.unsqueeze(1).detach().cpu()])
     
         
         sample = torch.cat(sample)
         samples.append(sample.unsqueeze(1).detach().cpu())
-        pred.append(torch.cat(pr))
+        pred.append(torch.cat(pr,dim=-2))
         gt.append(gt_agent.unsqueeze(1).detach().cpu())
         clean_cache(device)
 
@@ -379,42 +396,44 @@ def evaluate(model, val_dataset,loss_f, use_lane=False,
                 pos_enc = torch.unsqueeze(pos0[m], 2)
                 vel_enc = torch.unsqueeze(vel0[m], 2)
                 U = calc_u(sigma0[m])
-                inputs = (pos_enc, vel_enc, pr_pos1[m], pr_vel1[m], batch['accel'],
+                inputs = ([
+                        pos_enc, vel_enc, pr_pos1[m], pr_vel1[m], batch['accel'],
                         U, 
                         batch['lane'], batch['lane_norm'], 
-                        batch['car_mask'], batch['lane_mask'])
-
+                        batch['car_mask'], batch['lane_mask']
+                    ])
                 pos0[m], vel0[m] = pr_pos1[m], pr_vel1[m]
                 inputs_allmodes[m] = inputs
 
             pr_pos1, pr_vel1, pr_m1, states, p = model(inputs_allmodes, states=states)
             gt_pos1 = batch['pos'+str(i+2)]
+            losses += loss_f(pr_pos1, gt_pos1, sigma0, batch['car_mask'].squeeze(-1))
 
             sample = []
             pr = []
             gt_agemt = []
             for m in range(args.modes):
                 sigma0[m] = sigma0[m] + calc_sigma_edit(pr_m1[m])
-                losses += loss_f(pr_pos1[m], gt_pos1, sigma0[m], batch['car_mask'].squeeze(-1),prob=p[...,m])
-                pr_agent, gt_agent, p_agent = get_agent_multi(pr_pos1[m], batch['pos1'],
+                #losses += loss_f(pr_pos1[m], gt_pos1, sigma0[m], batch['car_mask'].squeeze(-1),prob=p[...,m])
+                pr_agent, gt_agent, p_agent = get_agent_multi(pr_pos1[m], gt_pos1,
                                     batch['track_id0'], batch['track_id1'], 
                                     agent_id, sigma0[m], p[..., m], device)
 
                 distr = torch.distributions.MultivariateNormal(pr_agent[:, :2], pr_agent[:, 2:].reshape(batch_size,2,2))
                 num_samp = int(np.around(p_agent.cpu().numpy()*6))
                 sample.append(distr.sample(sample_shape=(num_samp,)))
-                pr.append(pr_agent.unsqueeze(1).detach().cpu()) #, p_agent.unsqueeze(1).detach().cpu()])
+
+                pr.append(pr_agent.unsqueeze(0).unsqueeze(0).detach().cpu()) #, p_agent.unsqueeze(1).detach().cpu()])
             #print('gt', gt_agent[:4])
             #print('sample',sample)
             #print('pr', pr)
             sample = torch.cat(sample)
             samples.append(sample.unsqueeze(1).detach().cpu())
-            pred.append(torch.cat(pr))
+            pred.append(torch.cat(pr,dim=-2))
             gt.append(gt_agent.unsqueeze(1).detach().cpu())
             clean_cache(device)
 
-        #print('pred', len(pred))
-        #print('pred[0', len(pred[0]), pred[0])#pred[0].shape)
+        
         predict_result = (torch.cat(pred,axis=1), torch.cat(gt, axis=1), torch.cat(samples,axis=1))
         for idx, scene_id in enumerate(scenes):
             #print('pr', predict_result[0][idx].shape)
@@ -434,21 +453,24 @@ def evaluate(model, val_dataset,loss_f, use_lane=False,
         gt_expand = v[1].repeat((6, 1, 1))
         allde = torch.sqrt((samples[:,:,0] - gt_expand[:,:,0])**2 + (samples[:,:,1] - gt_expand[:,:,1])**2)
         minde[k] = torch.min(allde, 0).values.numpy()
+        de[k] = []
+        #print('v0', v[0].shape,'v1', v[1].shape )
 
         for m in range(args.modes):
-            de[k] = torch.sqrt((v[0][:,0] - v[1][:,0])**2 + (v[0][:,1] - v[1][:,1])**2)
+            #print('preds', v[0][:,:2], v[1][:,:2])
+            de[k].append(torch.sqrt((v[0][:,m,0] - v[1][:,0])**2 + (v[0][:,m,1] - v[1][:,1])**2).numpy())
+        de[k] = np.stack(de[k]).min(axis=0)
         #coverage[k] = get_coverage(v[0][:,:2], v[1], v[0][:,2:].reshape(train_window,2,2),sigma_ready=True) #pr_pos, gt_pos, pred_m, car_mask)
         #mis[k] = mis_loss(v[0][:,:2], v[1],v[0][:,2:].reshape(train_window,2,2),sigma_ready=True)
         #nll[k] = nll_dyna(v[0][:,:2], v[1],v[0][:,2:].reshape(train_window,2,2))
 
-    
     ade = []
     for k, v in de.items():
-        ade.append(np.mean(v.numpy()))
+        ade.append(np.mean(v))
     
     fde = []
     for k, v in de.items():
-        fde.append(v.numpy()[-1])
+        fde.append(v[-1])
     '''
     acoverage = []
     for k, v in coverage.items():

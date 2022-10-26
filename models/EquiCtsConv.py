@@ -82,7 +82,7 @@ class EquiCtsConvBase(nn.Module, metaclass=ABCMeta):
          
         cond_nonzero = ~((vec[...,0] == 0.) & (vec[...,1] == 0.))
     
-        theta = torch.zeros(vec[...,0].shape, device=self.outer_weights.device)
+        theta = torch.zeros(vec[...,0].shape, device=vec.device)
         theta[cond_nonzero] = torch.atan2(vec[...,1][cond_nonzero], vec[...,0][cond_nonzero])
         
         out = [r, theta]
@@ -156,14 +156,13 @@ class EquiCtsConvBase(nn.Module, metaclass=ABCMeta):
         @field_mask: [batch, num_n, 1]
         """
         kernel = self.computeKernel()
-        
+
         relative_field = (field.unsqueeze(1) - center.unsqueeze(2)) / self.radius
         # relative_field: [batch, num_m, num_n, pos_dim]
-        
 
         polar_field = self.PolarCoords(relative_field)
         # polar_field: [batch, num_m, num_n, pos_dim]
-        
+
         kernel_on_field = self.InterpolateKernel(kernel, polar_field)
         # kernel_on_field: [batch, num_m, num_n, c_out, c_in, 2, 2]
         
@@ -286,7 +285,7 @@ class EquiCtsConvBaseMat(EquiCtsConvBase):
         
         relative_field = (field.unsqueeze(1) - center.unsqueeze(2)) / self.radius
         # relative_field: [batch, num_m, num_n, pos_dim]
-        
+        #relative_field = relative_field.to(kernel.device)
 
         polar_field = self.PolarCoords(relative_field)
         # polar_field: [batch, num_m, num_n, pos_dim]

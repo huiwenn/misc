@@ -16,7 +16,7 @@ from EquiLinear import *
 from .rho_reg_ECCO_corrected import ECCONetwork
 
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+#device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 class PECCONetworkMulti(nn.Module):
     def __init__(self, 
                  radius_scale = 40,
@@ -28,11 +28,13 @@ class PECCONetworkMulti(nn.Module):
 
         self.modes = modes
         self.models = []
+        self.devices = ['cuda:0','cuda:1']
         for i in range(modes):
             thismode =  ECCONetwork(radius_scale=radius_scale,
                         layer_channels=layer_channels, 
                         encoder_hidden_size=encoder_hidden_size,
                         correction_scale=72)
+            thismode.to(self.devices[i])
             self.models.append(thismode)
             setattr(self, 'mode'+str(i), thismode)
 
@@ -45,6 +47,9 @@ class PECCONetworkMulti(nn.Module):
         self.fc = nn.Linear(24, self.modes) #fully connected last layer
         self.relu = nn.ReLU()
         self.m = nn.Softmax() 
+        for layer in [self.lstm,self.fc_1, self.fc ]:
+            layer.to(self.devices[0])
+
 
     
     def forward(self, inputs, states=None):
@@ -55,8 +60,16 @@ class PECCONetworkMulti(nn.Module):
         hidden_states = []
 
         for i in range(self.modes): 
+            for j in range(len(inputs[i])):
+                    inputs[i][j] = inputs[i][j].to(self.devices[i])
+                    
             if states:
+                for j in range(len(states[i])):
+                    if states[i][j] is not None:
+                        states[i][j] = states[i][j].to(self.devices[i])
+                        
                 pr_pos1, pr_vel1, m1, states1 = self.models[i](inputs[i], states[i])
+           
             else:
                 pr_pos1, pr_vel1, m1, states1 = self.models[i](inputs[i])
             
@@ -68,8 +81,8 @@ class PECCONetworkMulti(nn.Module):
             statess.append(states1)
         
             # put in inputs here
-            h_0 = Variable(torch.zeros(self.lstm_layers, pr_pos1.size(1), self.hidden_size,device=device)) #hidden state
-            c_0 = Variable(torch.zeros(self.lstm_layers, pr_pos1.size(1), self.hidden_size, device=device)) #internal state
+            h_0 = Variable(torch.zeros(self.lstm_layers, pr_pos1.size(1), self.hidden_size,device=self.devices[0])) #hidden state
+            c_0 = Variable(torch.zeros(self.lstm_layers, pr_pos1.size(1), self.hidden_size, device=self.devices[0])) #internal state
             # Propagate input through LSTM
             if states:
                 #print('state shapes', states[i][0][...,1:,:].shape,inputs[i][1].shape, inputs[i][3].shape, pr_vel1.shape)
@@ -77,9 +90,8 @@ class PECCONetworkMulti(nn.Module):
             else:
                 #print('nostate shapes', inputs[i][1].shape, inputs[i][3].unsqueeze(-2).shape, pr_vel1.unsqueeze(-2).shape)
                 x = torch.cat([inputs[i][1],inputs[i][3].unsqueeze(-2), pr_vel1.unsqueeze(-2)], dim=-2)
-            
 
-            output, (hn, cn) = self.lstm(x.squeeze(), (h_0, c_0)) #lstm with input, hidden, and internal state
+            output, (hn, cn) = self.lstm(x.squeeze().to(self.devices[0]), (h_0, c_0)) #lstm with input, hidden, and internal state
             #print('h_0',h_0.shape)
             #print('hn', hn.shape)
             hn = hn[-1] #.view(-1, self.hidden_size) #reshaping the data for Dense layer next
@@ -96,9 +108,17 @@ class PECCONetworkMulti(nn.Module):
             p = self.fc(out) #Final Output
             p_norm = self.m(p).unsqueeze(0) # add dimention for batch
         else:
-            p_norm = torch.ones(pr_pos[0].size(0), pr_pos[0].size(1), 1, device=device)
+            p_norm = torch.ones(pr_pos[0].size(0), pr_pos[0].size(1), 1, device=self.devices[0])
 
-        print('p_norm', p_norm.shape, p_norm)
+        #print('p_norm', p_norm.shape, p_norm)
+        for j in range(len(pr_pos)):
+            pr_pos[j] = pr_pos[j].to(self.devices[0])
+
+        for j in range(len(pr_vel)):
+            pr_vel[j] = pr_vel[j].to(self.devices[0])
+        for j in range(len(sigma)):
+            sigma[j] = sigma[j].to(self.devices[0])
+
         return pr_pos, pr_vel, sigma, statess, p_norm 
 
 

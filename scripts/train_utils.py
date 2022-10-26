@@ -24,7 +24,7 @@ def get_agent_multi(pr, gt, pr_id, gt_id, agent_id,  pr_m1, p, device = 'cpu',) 
     gt_agent = gt[gt_id == agent_id, :]
 
     pr_m_agent = torch.flatten(pr_m1[pr_id == agent_id, :], start_dim=-2, end_dim=-1)
-    print('pagent', p.shape)
+    #print('pagent', p.shape)
     p_agent = p[gt_id == agent_id,:]
 
     return torch.cat([pr_agent, pr_m_agent], dim=-1), gt_agent, p_agent
@@ -109,6 +109,10 @@ def calc_u(sigma):
     mask = torch.cat([r1.unsqueeze(-1),rz,rz,r0.unsqueeze(-1)], axis=-1).reshape(sigma.shape[0],sigma.shape[1],2,2)
     sigma = sigma + eps*mask
     L, V = torch.linalg.eigh(sigma)
+    #print('V', V)
+    #print('L', L)
+    #print('sig', sigma)
+    
     U = V @ torch.diag_embed(L.pow(0.5))
     return U
 
@@ -130,9 +134,30 @@ def nll(pr_pos, gt_pos, pred_m, car_mask=1):
     return torch.mean(loss * car_mask)
 
 def nll_dyna(pr_pos, gt_pos, sigma, car_mask=1, prob=1):
+    #print('det', torch.pow(sigma.det(), 0.5))
+
     loss = 0.5 * quadratic_func(gt_pos - pr_pos[...,:2], sigma.inverse()) \
         + torch.log(2 * 3.1416 * torch.pow(sigma.det(), 0.5))
     return torch.mean(loss * car_mask * prob)
+
+def wta_loss(pr_pos, gt_pos, sigma, car_mask=1): 
+    #winner take all loss
+    all_nll_dyna = []
+    for m in range(len(pr_pos)):
+        all_nll_dyna.append(nll_dyna(pr_pos[m], gt_pos, sigma[m], car_mask))
+    return  torch.min(torch.stack(all_nll_dyna))
+
+    
+class MyDataParallel(torch.nn.DataParallel):
+    """
+    Allow nn.DataParallel to call model's attributes.
+    """
+    def __getattr__(self, name):
+        try:
+            return super().__getattr__(name)
+        except AttributeError:
+            return getattr(self.module, name)
+
 
 def nll_multimodal_dyna(output, gt_pos, car_mask=1):
     print(output.shape) #batch, car, output, 2
