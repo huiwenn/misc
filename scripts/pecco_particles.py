@@ -31,11 +31,9 @@ def make_batch(feed, device='cuda', h=30):
     
     data, output = feed
     # [batch, num_part, timestamps, 2]
-    data = data.reshape((data.shape[0], 5, h, 2))
-    output = output.reshape((data.shape[0], 5, 19, 2))
 
-    data.to(device)
-    output.to(device)
+    data = data.permute(0,3,1,2).to(device)
+    output = output.permute(0,3,1,2).to(device)
 
     batch['pos_2s'] = data[...,:h-1,:]
     batch['vel_2s'] = data[...,1:,:] - data[...,:h-1,:]
@@ -60,23 +58,24 @@ def train_one_batch(model, batch, loss_f, train_window=2):
     batch['lane_mask'] = torch.ones(batch_size, 1, 1, device=device)
 
     m0 = -5*torch.eye(2, device=device).reshape((1,2,2)).repeat((batch_size, 5, 1, 1))
-    sigma0 = calc_sigma_edit(m0)
-    U = calc_u(sigma0)
+    #sigma0 = calc_sigma_edit(m0)
+    #U = calc_u(sigma0)
     inputs = ([
         batch['pos_2s'], batch['vel_2s'],
         batch['pos0'], batch['vel0'], 
-        batch['accel'], U, 
+        batch['accel'], m0, #U, 
         batch['lane'], batch['lane_norm'], 
         batch['car_mask'], batch['lane_mask']
     ])
 
     pr_pos1, pr_vel1, pr_m1, states = model(inputs)
     # pr_m1: batch_size x num_vehicles x 2 x 2
-    sigma0 = sigma0 + calc_sigma_edit(pr_m1)
+    # sigma0 = sigma0 + calc_sigma_edit(pr_m1)
     gt_pos1 = batch['pos1']
     #print('pr', pr_pos1.device, 'gt', gt_pos1.device, 'sigma',sigma0.device, 'mask', batch['car_mask'].device)
 
-    losses = loss_f(pr_pos1, gt_pos1, sigma0, batch['car_mask'].squeeze(-1))
+    #sigma0
+    losses = loss_f(pr_pos1, gt_pos1, pr_m1, batch['car_mask'].squeeze(-1))
     if torch.isnan(losses).any():
         print('bad news here')
         print('first step')
@@ -104,9 +103,9 @@ def train_one_batch(model, batch, loss_f, train_window=2):
     for i in range(train_window-1):
         pos_enc = torch.unsqueeze(pos0, 2)
         vel_enc = torch.unsqueeze(vel0, 2)
-        U = calc_u(sigma0)
+        #U = calc_u(sigma0)
         inputs = (pos_enc, vel_enc, pr_pos1, pr_vel1, batch['accel'],
-                  U, 
+                  pr_m1, #U, 
                   batch['lane'], batch['lane_norm'], 
                   batch['car_mask'], batch['lane_mask'])
 
@@ -116,8 +115,9 @@ def train_one_batch(model, batch, loss_f, train_window=2):
         pr_pos1, pr_vel1, pr_m1, states = model(inputs, states)
         gt_pos1 = batch['pos'+str(i+2)]
 
-        sigma0 = sigma0 + calc_sigma_edit(pr_m1)
-        step_loss = loss_f(pr_pos1, gt_pos1, sigma0, batch['car_mask'].squeeze(-1))
+        #sigma0 = sigma0 + calc_sigma_edit(pr_m1)
+        # sigma0
+        step_loss = loss_f(pr_pos1, gt_pos1, pr_m1, batch['car_mask'].squeeze(-1))
         
         if torch.isnan(step_loss).any():
             print('bad news here')
@@ -125,11 +125,11 @@ def train_one_batch(model, batch, loss_f, train_window=2):
             print('nan in pr_pos1', torch.isnan(pr_pos1).any())
             print('nan in pr_m1', torch.isnan(pr_m1).any())
             print('nan in states', torch.isnan(states[0]).any())
-            print('nan in sigma', torch.isnan(sigma0).any())
+            #print('nan in sigma', torch.isnan(sigma0).any())
             #print('sigma0', sigma0)
             continue
 
-        losses +=step_loss
+        losses += step_loss
 
     total_loss = torch.sum(losses, axis=0) / (train_window)
     #print(total_loss)
@@ -173,7 +173,7 @@ class LSTMDataset(Dataset):
 def train(model):
     device = 'cuda'
     model.to(device)
-    model_name = 'pecco_particles'
+    model_name = 'pecco_particles_19'
     log_dir = "runs/" + model_name + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     writer = SummaryWriter(log_dir=log_dir)
     
@@ -184,7 +184,7 @@ def train(model):
     val_dataloader = DataLoader(val_dataset, batch_size=64, shuffle=True)
 
 
-    loss_f = nll_dyna
+    loss_f = nll #nll_dyna
     
     base_lr=0.001
 
@@ -195,14 +195,14 @@ def train(model):
     print('loaded datasets, starting training')
 
   
-    epochs = 20
+    epochs = 50
     #batches_per_epoch = args.batches_per_epoch   # batchs_per_epoch.  Dataset is too large to run whole data. 
     data_load_times = []  # Per batch 
     train_losses = []
     valid_losses = []
     valid_metrics_list = []
     min_loss = None
-    train_window = 2
+    train_window = 19
 
     # first eval
     '''
@@ -227,8 +227,8 @@ def train(model):
         sub_idx = 0
 
         for i_batch, feed_dict in enumerate(tqdm(train_dataloader)):
+            optimizer.zero_grad()
             batch_tensor = make_batch(feed_dict, device)
-
             current_loss = train_one_batch(model, batch_tensor, loss_f, train_window=train_window)
 
             current_loss.backward()
@@ -284,7 +284,8 @@ def train(model):
             round((epoch_end_time - epoch_start_time) / 60, 5),
             format(get_lr(optimizer), "5.2e"), model_name
         ))
-
+        torch.save(model.module, model_name + ".pth")
+        print(train_losses)
         writer.add_scalar("Loss/train", train_losses[-1], i)
         writer.flush()
 
@@ -293,7 +294,7 @@ def train(model):
 
 
 if __name__ == '__main__':
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '1,2,3,4'
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("using device", device)
@@ -305,7 +306,7 @@ if __name__ == '__main__':
     model = ECCONetwork(radius_scale = 40,
                         layer_channels = [8, 16, 16, 16, 3], #[8, 24, 24, 24, 3], #[16, 32, 32, 32, 3], 
                         encoder_hidden_size=32,
-                        correction_scale=36)
+                        correction_scale=72)
 
     print('made model. loading dataset')
     #with torch.autograd.detect_anomaly():

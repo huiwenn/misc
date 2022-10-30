@@ -74,13 +74,6 @@ def calc_sigma_old(M):
     # scalling
     return 0.1*torch.matrix_exp(sigma)
 
-def calc_sigma_edit(M):
-    M = torch.tanh(M)
-    expM = torch.matrix_exp(M)
-    expMT = torch.matrix_exp(torch.transpose(M,-2,-1))
-    sigma = torch.einsum('...xy,...yz->...xz', expM, expMT)
-    return 0.1*sigma #for argoverse 0.1, for ped 1.5
-
 def calc_sigma_multi(Ms):   
     modes = Ms.shape[-2]//2
     sigmas = []
@@ -99,21 +92,38 @@ def calc_sigma(M):
     sigma_scaled = 0.5*sigma 
     return sigma_scaled
 
+def calc_sigma_edit(M, scale = 0.1):
+    M = torch.tanh(M)
+    expM = torch.matrix_exp(M)
+    expMT = torch.matrix_exp(torch.transpose(M,-2,-1))
+    sigma = torch.einsum('...xy,...yz->...xz', expM, expMT)
+    return scale*sigma #for argoverse 0.1, for ped 1.5
+
 def calc_u(sigma):
+    
+    if torch.isnan(sigma).any():
+        print('input sigma nan already')
+
     device = sigma.device
-    eps=1e-6
-    r1 = torch.empty(*sigma.shape[:-2],device=device).random_(2)
-    rsum = torch.ones_like(r1,device=device)
-    r0 = rsum-r1
-    rz = torch.zeros_like(r1.unsqueeze(-1),device=device)
-    mask = torch.cat([r1.unsqueeze(-1),rz,rz,r0.unsqueeze(-1)], axis=-1).reshape(sigma.shape[0],sigma.shape[1],2,2)
+    # This part tis to add a small scalar to the sigma such that linalg computs 
+    eps = 1e-5
+    # r1 = torch.empty(*sigma.shape[:-2],device=device).random_(2)
+    # rsum = torch.ones_like(r1,device=device)
+    # r0 = rsum - r1
+    # rz = torch.zeros_like(r1.unsqueeze(-1),device=device)
+    # mask = torch.cat([r1.unsqueeze(-1),rz,rz,r0.unsqueeze(-1)], axis=-1).reshape(sigma.shape[0],sigma.shape[1],2,2)
+    mask = torch.eye(2, device=device).reshape((1,2,2)).repeat((sigma.shape[0], sigma.shape[1], 1, 1))
     sigma = sigma + eps*mask
+
+    #print('sig', sigma)
     L, V = torch.linalg.eigh(sigma)
     #print('V', V)
     #print('L', L)
-    #print('sig', sigma)
-    
     U = V @ torch.diag_embed(L.pow(0.5))
+
+    if torch.isnan(U).any():
+        print('output U nan')
+
     return U
 
 def calc_u_multi(sigmas):   

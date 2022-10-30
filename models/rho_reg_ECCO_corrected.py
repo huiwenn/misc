@@ -125,7 +125,6 @@ class ECCONetwork(nn.Module):
         p0, p1: the position of the particle before/after basic integration. """
         dt = self.timestep
         p_corrected = p1 + correction
-        #print(correction)
         v_corrected = (p_corrected - p0) / dt
         return p_corrected, v_corrected
 
@@ -170,7 +169,7 @@ class ECCONetwork(nn.Module):
         output_mat = self.mat_output(p, p, in_feats, fluid_mask)
         output_pos =  (output_conv + output_dense)
         # before it's all 1.0/ 128
-        self.pos_correction = torch.cat([ (1.0 / 32) * output_pos, (1.0 / 128) * output_mat.squeeze(2)], dim=-2)
+        self.pos_correction = torch.cat([ (1.0 / self.correction_scale) * output_pos, (1.0 / 128) * output_mat.squeeze(2)], dim=-2)
 
         # compute the number of fluid particle neighbors.
         # this info is used in the loss function during training.
@@ -179,10 +178,6 @@ class ECCONetwork(nn.Module):
     
         # self.last_features = self.outputs[-2]
 
-        # scale to better match the scale of the output distribution
-        # scale in pecco is (1.0 / 128) 
-        # self.pos_correction = (1.0 / 128) * output #(1.0 / self.correction_scale) * output
-        #print(self.pos_correction) check scale of this
         return self.pos_correction
     
     def forward(self, inputs, states=None):
