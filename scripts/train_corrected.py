@@ -51,17 +51,17 @@ parser.set_defaults(representation=True)
 
 def create_model():
     if args.representation:
-        from models.rho_reg_ECCO import ECCONetwork
+        from models.rho_reg_ECCO_corrected import ECCONetwork
         """Returns an instance of the network for training and evaluation"""
         
         model = ECCONetwork(radius_scale = 40,
-                            layer_channels = [8, 16, 16, 16, 3], #[8, 24, 24, 24, 3], #[16, 32, 32, 32, 3], 
+                            layer_channels = [8, 16, 16, 16, 1], #[8, 24, 24, 24, 3], #[16, 32, 32, 32, 3], 
                             encoder_hidden_size=21,
                             correction_scale=72)
     else:
         from models.rho1_ECCO import ECCONetwork
         """Returns an instance of the network for training and evaluation"""
-        model = ECCONetwork(radius_scale = 40, encoder_hidden_size=18,
+        model = ECCONetwork(radius_scale = 40, encoder_hidden_size= 18,
                             layer_channels = [16, 32, 32, 32, 1], 
                             num_radii = 3)
     return model
@@ -80,6 +80,7 @@ def train():
     #am = ArgoverseMap()
     log_dir = "runs/" + model_name + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     writer = SummaryWriter(log_dir=log_dir)
+    num_samples = 0
 
     print('loading train dataset')
     dataset = read_pkl_data(train_path, batch_size=args.batch_size / args.batch_divide,
@@ -99,7 +100,7 @@ def train():
     elif args.loss == "mis": 
         loss_f = mis_loss
     else: # args.loss == "nll":
-        loss_f = nll_dyna
+        loss_f = nll
 
 
     model = MyDataParallel(model)
@@ -117,31 +118,31 @@ def train():
             batch['lane_mask'] = torch.ones(batch_size, 1, 1, device=device)
 
         m0 = -5*torch.eye(2, device=device).reshape((1,2,2)).repeat((batch_size, 60, 1, 1))
-        sigma0 = calc_sigma_edit(m0)
-        U = calc_u(sigma0)
+        #sigma0 = calc_sigma_edit(m0)
+        #U = calc_u(sigma0)
         inputs = ([
             batch['pos_2s'], batch['vel_2s'],
             batch['pos0'], batch['vel0'], 
-            batch['accel'], U, 
+            batch['accel'], m0, #U, 
             batch['lane'], batch['lane_norm'], 
             batch['car_mask'], batch['lane_mask']
         ])
     
         pr_pos1, pr_vel1, pr_m1, states = model(inputs)
         # pr_m1: batch_size x num_vehicles x 2 x 2
-        sigma0 = sigma0 + calc_sigma_edit(pr_m1)
+        #sigma0 = sigma0 + calc_sigma_edit(pr_m1)
         gt_pos1 = batch['pos1']
 
-        losses = loss_f(pr_pos1, gt_pos1, sigma0, batch['car_mask'].squeeze(-1))
+        losses = loss_f(pr_pos1, gt_pos1, pr_m1, batch['car_mask'].squeeze(-1))
         del gt_pos1
         pos0 = batch['pos0']
         vel0 = batch['vel0']
         for i in range(train_window-1):
             pos_enc = torch.unsqueeze(pos0, 2)
             vel_enc = torch.unsqueeze(vel0, 2)
-            U = calc_u(sigma0)
+            #U = calc_u(sigma0)
             inputs = (pos_enc, vel_enc, pr_pos1, pr_vel1, batch['accel'],
-                      U, 
+                      pr_m1, #U, 
                       batch['lane'], batch['lane_norm'], 
                       batch['car_mask'], batch['lane_mask'])
 
@@ -151,9 +152,9 @@ def train():
             pr_pos1, pr_vel1, pr_m1, states = model(inputs, states)
             gt_pos1 = batch['pos'+str(i+2)]
             
-            sigma0 = sigma0 + calc_sigma_edit(pr_m1)
+            #sigma0 = sigma0 + calc_sigma_edit(pr_m1)
 
-            losses += loss_f(pr_pos1, gt_pos1, sigma0, batch['car_mask'].squeeze(-1))
+            losses += loss_f(pr_pos1, gt_pos1, pr_m1, batch['car_mask'].squeeze(-1))
 
         total_loss = torch.sum(losses, axis=0) / (train_window)
         return total_loss
@@ -176,7 +177,11 @@ def train():
                                                 device=device, use_lane=args.use_lane,
                                                 batch_size=args.val_batch_size)
         num_samples = 0
-        writer.add_scalar('MRS', result['mis'], num_samples)
+        writer.add_scalar('val/NLL', result['nll'], num_samples)
+        writer.add_scalar('val/minADE', result['minADE'], num_samples)
+        writer.add_scalar('val/minFDE', result['minFDE'], num_samples)
+        writer.add_scalar('val/ES', result['es'], num_samples)
+
 
     for i in range(epochs):
         print("training ... epoch " + str(i + 1))#, end='', flush=True)
@@ -209,6 +214,7 @@ def train():
                 current_loss.backward(retain_graph=True)
             else:
                 current_loss.backward()
+                nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0, norm_type=2)
                 optimizer.step()
                 sub_idx = 0
             del batch_tensor
@@ -235,8 +241,11 @@ def train():
             for k,v in result.items():
                 writer.add_scalar(k, v, i)
             
-            num_samples = i * batches_per_epoch * args.batch_size
-            writer.add_scalar('MRS', result['mis'], num_samples)
+            num_samples += batches_per_epoch * args.batch_size
+            writer.add_scalar('val/NLL', result['nll'], num_samples)
+            writer.add_scalar('val/minADE', result['minADE'], num_samples)
+            writer.add_scalar('val/minFDE', result['minFDE'], num_samples)
+            writer.add_scalar('val/ES', result['es'], num_samples)
 
 
         valid_losses.append(float(valid_total_loss))
@@ -350,28 +359,29 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         scenes = data['scene_idx']
         
         m0 = -10*torch.eye(2, device=device).reshape((1,2,2)).repeat((batch_size, 60, 1, 1))
-        sigma0 = calc_sigma_edit(m0)
-        U = calc_u(sigma0)
+        #sigma0 = calc_sigma_edit(m0)
+        #U = calc_u(sigma0)
         #print('sigma0', sigma0[:, :2])
 
         inputs = ([
             data['pos_2s'], data['vel_2s'], 
             data['pos0'], data['vel0'], 
-            data['accel'], U,
+            data['accel'], m0, #U,
             data['lane'], data['lane_norm'], 
             data['car_mask'], data['lane_mask']
         ])
-        print(inputs)
+        #print(inputs)
 
         pr_pos1, pr_vel1, pr_m1, states = model(inputs)
 
         gt_pos1 = data['pos1']
         
-        sigma0 = sigma0 + calc_sigma_edit(pr_m1)
+        #sigma0 = sigma0 + calc_sigma_edit(pr_m1)
         #print('prm1', calc_sigma_edit(pr_m1)[:, :2])
         #print('sigma1', sigma0[:, :2])
 
-        losses = loss_f(pr_pos1, gt_pos1, sigma0, data['car_mask'].squeeze(-1))
+        losses = loss_f(pr_pos1, gt_pos1, pr_m1, data['car_mask'].squeeze(-1))
+        sigma0 = calc_sigma(pr_m1)
 
         pr_agent, gt_agent = get_agent(pr_pos1, data['pos1'],
                                        data['track_id0'], 
@@ -394,12 +404,11 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         for j in range(train_window-1):
             pos_enc = torch.unsqueeze(pos0, 2)
             vel_enc = torch.unsqueeze(vel0, 2)
-            U = calc_u(sigma0)
+            #U = calc_u(sigma0)
             # test todo 
             # pr_m1 = torch.zeros((batch_size, 60, 2, 2), device=device)
-
             inputs = (pos_enc, vel_enc, pr_pos1, pr_vel1, data['accel'],
-                      U, 
+                      pr_m1, #U, 
                       data['lane'],
                       data['lane_norm'], data['car_mask'], data['lane_mask'])
 
@@ -410,9 +419,9 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
 
             gt_pos1 = data['pos'+str(j+2)]
 
-            sigma0 = sigma0 + calc_sigma_edit(pr_m1)
-            losses += loss_f(pr_pos1, gt_pos1, sigma0, data['car_mask'].squeeze(-1))
-
+            #sigma0 = sigma0 + calc_sigma_edit(pr_m1)
+            losses += loss_f(pr_pos1, gt_pos1, pr_m1, data['car_mask'].squeeze(-1))
+            sigma0 = calc_sigma(pr_m1)
             pr_agent, gt_agent = get_agent(pr_pos1, data['pos'+str(j+2)],
                                            data['track_id0'],
                                            data['track_id'+str(j+1)],
@@ -440,7 +449,6 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     minde = {}
     coverage = {}
     es = {}
-    mis = {}
     nll = {}
 
     for k, v in prediction_gt.items():
@@ -452,15 +460,14 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         #if (minde_ >10).any():
         #    continue
         minde[k] = torch.min(allde, 0).values.numpy()
-        
+
         cov = v[0][:,2:].reshape(train_window,2,2)
 
         de[k] = torch.sqrt((v[0][:,0] - v[1][:,0])**2 + (v[0][:,1] - v[1][:,1])**2)
-        coverage[k] = get_coverage(v[0][:,:2], v[1], v[0][:,2:].reshape(train_window,2,2),sigma_ready=True) #pr_pos, gt_pos, pred_m, car_mask)
-        
-        mis[k] = mis_loss(v[0][:,:2], v[1], cov, sigma_ready=True)
+        coverage[k] = get_coverage(v[0][:,:2], v[1], cov,sigma_ready=True) #pr_pos, gt_pos, pred_m, car_mask)
+        #mis[k] = mis_loss(v[0][:,:2], v[1],v[0][:,2:].reshape(train_window,2,2),sigma_ready=True)
         nll[k] = nll_dyna(v[0][:,:2], v[1], cov)
-        es[k] = torch.norm(v[0][:,:2] - v[1], dim=-1) + torch.stack([torch.trace(c) for c in cov])
+        es[k] = torch.norm(v[0][:,:2] - v[1], dim=-1) - torch.stack([torch.trace(c) for c in cov])
 
 
     ade = []
@@ -475,10 +482,9 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     for k, v in coverage.items():
         acoverage.append(np.mean(v.numpy()))
 
-    amis = []
-    for k, v in mis.items():
-        amis.append(np.mean(v.numpy()))
-        
+    # amis = []
+    # for k, v in mis.items():
+    #     amis.append(np.mean(v.numpy()))
     aes = []
     for k, v in es.items():
         aes.append(np.mean(v.numpy()))
@@ -494,7 +500,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     result['minFDE'] = np.mean(np.array(list(minde.values()))[:,-1])
     result['ADE_std'] = np.std(ade)
     result['coverage'] = np.mean(acoverage)
-    result['mis'] = np.mean(amis)
+    #result['mis'] = np.mean(amis)
     result['nll'] = np.mean(anll)
     result['es'] = np.mean(aes)
 

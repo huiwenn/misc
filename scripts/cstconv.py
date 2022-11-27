@@ -83,7 +83,7 @@ def train():
     #am = ArgoverseMap()
     log_dir = "runs/" + model_name + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     writer = SummaryWriter(log_dir=log_dir)
-
+    num_samples = 0
 
     print('loading tain dataset')
     dataset = read_pkl_data(train_path, batch_size=args.batch_size / args.batch_divide,
@@ -113,7 +113,7 @@ def train():
 
     def train_one_batch(model, batch, loss_f, train_window=2):
 
-        batch_size = int(args.batch_size / args.batch_divide)
+        batch_size = batch['pos0'].shape[0]
         if not args.use_lane:
             batch['lane'] = torch.zeros(batch_size, 1, 3, device=device)
             batch['lane_norm'] = torch.zeros(batch_size, 1, 3, device=device)
@@ -192,8 +192,11 @@ def train():
                                                 max_iter=args.val_batches,
                                                 device=device, use_lane=args.use_lane,
                                                 batch_size=args.val_batch_size)
-        num_samples = 0
-        writer.add_scalar('MRS', result['mis'], num_samples)
+        
+        writer.add_scalar('val/NLL', result['nll'], num_samples)
+        writer.add_scalar('val/minADE', result['minADE'], num_samples)
+        writer.add_scalar('val/minFDE', result['minFDE'], num_samples)
+        writer.add_scalar('val/ES', result['es'], num_samples)
 
     for i in range(epochs):
         print("training ... epoch " + str(i + 1), end='', flush=True)
@@ -256,9 +259,11 @@ def train():
             for k,v in result.items():
                 writer.add_scalar(k, v, i)
             
-            num_samples = i * batches_per_epoch * args.batch_size
-            writer.add_scalar('MRS', result['mis'], num_samples)
-
+            num_samples += batches_per_epoch * args.batch_size
+            writer.add_scalar('val/NLL', result['nll'], num_samples)
+            writer.add_scalar('val/minADE', result['minADE'], num_samples)
+            writer.add_scalar('val/minFDE', result['minFDE'], num_samples)
+            writer.add_scalar('val/ES', result['es'], num_samples)
 
 
         valid_losses.append(float(valid_total_loss))
@@ -448,7 +453,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     result = {}
     de = {}
     coverage = {}
-    mis = {}
+    es = {}
     nlls = {}
     minde = {}
 
@@ -461,11 +466,12 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         #print(samples.shape, v[1].shape, gt_expand.shape)
         allde = torch.sqrt((samples[:,:,0] - gt_expand[:,:,0])**2 + (samples[:,:,1] - gt_expand[:,:,1])**2)
         minde[k] = torch.min(allde, 0).values.numpy()
-
-        coverage[k] = get_coverage(v[0][:,:2], v[1], v[0][:,3:].reshape(train_window,2,2)) #pr_pos, gt_pos, pred_m, car_mask)
-        mis[k] = mis_loss(v[0][:,:2], v[1],v[0][:,3:].reshape(train_window,2,2))
-        nlls[k] = nll(v[0][:,:2], v[1],v[0][:,3:].reshape(train_window,2,2))
-
+        
+        cov = v[0][:,3:].reshape(train_window,2,2)
+        coverage[k] = get_coverage(v[0][:,:2], v[1], cov) #pr_pos, gt_pos, pred_m, car_mask)
+        #mis[k] = mis_loss(v[0][:,:2], v[1],v[0][:,3:].reshape(train_window,2,2))
+        nlls[k] = nll(v[0][:,:2], v[1], cov)
+        es[k] = torch.norm(v[0][:,:2] - v[1], dim=-1) - torch.stack([torch.trace(c) for c in cov])
 
     ade = []
     for k, v in de.items():
@@ -475,10 +481,13 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     for k, v in coverage.items():
         acoverage.append(np.mean(v.numpy()))
 
-    amis = []
-    for k, v in mis.items():
-        amis.append(np.mean(v.numpy()))
-    
+    # amis = []
+    # for k, v in mis.items():
+    #     amis.append(np.mean(v.numpy()))
+    aes = []
+    for k, v in es.items():
+        aes.append(np.mean(v.numpy()))
+
     anll = []
     for k, v in nlls.items():
         anll.append(np.mean(v.numpy()))
@@ -487,8 +496,9 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     result['ADE'] = np.mean(ade)
     result['ADE_std'] = np.std(ade)
     result['coverage'] = np.mean(acoverage)
-    result['mis'] = np.mean(amis)
+    #result['mis'] = np.mean(amis)
     result['nll'] = np.mean(anll)
+    result['es'] = np.mean(aes)
 
     result['minADE'] = np.mean(list(minde.values()))
     result['minFDE'] = np.mean(np.array(list(minde.values()))[:,-1])

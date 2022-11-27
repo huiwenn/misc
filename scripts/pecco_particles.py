@@ -9,7 +9,6 @@ import json
 import pickle
 import argparse
 import datetime
-from datasets.argoverse_lane_loader import read_pkl_data
 from train_utils import *
 
 from typing import Any, Dict, List, Tuple, Union
@@ -25,29 +24,6 @@ from tqdm import tqdm
 test_data = np.load('/data/sophiasun/particles_data/loc_test_springs5.npy')
 train_data = np.load('/data/sophiasun/particles_data/loc_train_springs5.npy')
 valid_data = np.load('/data/sophiasun/particles_data/loc_valid_springs5.npy')
-
-def make_batch(feed, device='cuda', h=30):
-    batch = {}
-    
-    data, output = feed
-    # [batch, num_part, timestamps, 2]
-
-    data = data.permute(0,3,1,2).to(device)
-    output = output.permute(0,3,1,2).to(device)
-
-    batch['pos_2s'] = data[...,:h-1,:]
-    batch['vel_2s'] = data[...,1:,:] - data[...,:h-1,:]
-    batch['pos0'] = data[...,h-1,:]
-    batch['vel0'] = output[...,0,:]-data[...,h-1,:]
-    #print('pos_2s', batch['pos_2s'].shape, 'vel', batch['vel_2s'].shape)
-    
-    for i in range(19):
-        batch['pos'+str(i+1)] = output[:,:,i,:].to(device)
-    
-    accel = torch.zeros(data.shape[0], 1, 2).to(device)
-    batch['accel'] = accel
-    batch['car_mask'] = torch.ones(data.shape[0], 5, 1).to(device)
-    return batch
 
 def train_one_batch(model, batch, loss_f, train_window=2):
 
@@ -136,43 +112,8 @@ def train_one_batch(model, batch, loss_f, train_window=2):
     return total_loss
 
 
-class MyDataParallel(torch.nn.DataParallel):
-    """
-    Allow nn.DataParallel to call model's attributes.
-    """
-    def __getattr__(self, name):
-        try:
-            return super().__getattr__(name)
-        except AttributeError:
-            return getattr(self.module, name)
 
-class LSTMDataset(Dataset):
-    def __init__(self, data, obs_len=30, shuffle=True):
-   
-        wholetraj = data
-        self.obs_len= obs_len
-        # if need preprocessing here
-        normalized = wholetraj
-
-        self.input_data = normalized[:, :self.obs_len, :]
-        self.output_data = normalized[:, self.obs_len:, :]
-        self.data_size = self.input_data.shape[0]
-
-    def __len__(self):
-        return self.data_size
-
-    def __getitem__(self, idx: int
-                    ) -> Tuple[torch.FloatTensor, Any, Dict[str, np.ndarray]]:
-        return (
-            torch.FloatTensor(self.input_data[idx]),
-            torch.FloatTensor(
-                self.output_data[idx])
-        )
-
-        
 def train(model):
-    device = 'cuda'
-    model.to(device)
     model_name = 'pecco_particles_19'
     log_dir = "runs/" + model_name + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     writer = SummaryWriter(log_dir=log_dir)
@@ -232,9 +173,10 @@ def train(model):
             current_loss = train_one_batch(model, batch_tensor, loss_f, train_window=train_window)
 
             current_loss.backward()
+            nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0, norm_type=2)
             optimizer.step()
             
-            if i_batch%10==0:
+            if i_batch%50==0:
                 print('loss', current_loss)
             
             del batch_tensor
@@ -276,7 +218,6 @@ def train(model):
                 torch.save(model.module, model_name + ".pth")
             
         # ----- end of eval ------
-
         epoch_end_time = time.time()
 
         print('epoch: {}, train loss: {}, epoch time: {}, lr: {}, {}'.format(
@@ -284,13 +225,15 @@ def train(model):
             round((epoch_end_time - epoch_start_time) / 60, 5),
             format(get_lr(optimizer), "5.2e"), model_name
         ))
-        torch.save(model.module, model_name + ".pth")
+        if len(train_losses) < 2 or train_losses[-1] <= train_losses[-2]:
+            torch.save(model.module, model_name + ".pth")
         print(train_losses)
         writer.add_scalar("Loss/train", train_losses[-1], i)
+        #writer.add_scalar("Loss/validation", valid_losses[-1], i)
+
         writer.flush()
 
         scheduler.step()
-        #profiler.step()
 
 
 if __name__ == '__main__':
@@ -307,6 +250,7 @@ if __name__ == '__main__':
                         layer_channels = [8, 16, 16, 16, 3], #[8, 24, 24, 24, 3], #[16, 32, 32, 32, 3], 
                         encoder_hidden_size=32,
                         correction_scale=72)
+    model.to(device)
 
     print('made model. loading dataset')
     #with torch.autograd.detect_anomaly():

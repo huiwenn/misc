@@ -80,6 +80,7 @@ def train():
     #am = ArgoverseMap()
     log_dir = "runs/" + model_name + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     writer = SummaryWriter(log_dir=log_dir)
+    num_samples = 0
 
     print('loading train dataset')
     dataset = read_pkl_data(train_path, batch_size=args.batch_size / args.batch_divide,
@@ -176,7 +177,11 @@ def train():
                                                 device=device, use_lane=args.use_lane,
                                                 batch_size=args.val_batch_size)
         num_samples = 0
-        writer.add_scalar('MRS', result['mis'], num_samples)
+        writer.add_scalar('val/NLL', result['nll'], num_samples)
+        writer.add_scalar('val/minADE', result['minADE'], num_samples)
+        writer.add_scalar('val/minFDE', result['minFDE'], num_samples)
+        writer.add_scalar('val/ES', result['es'], num_samples)
+
 
     for i in range(epochs):
         print("training ... epoch " + str(i + 1))#, end='', flush=True)
@@ -209,6 +214,7 @@ def train():
                 current_loss.backward(retain_graph=True)
             else:
                 current_loss.backward()
+                nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0, norm_type=2)
                 optimizer.step()
                 sub_idx = 0
             del batch_tensor
@@ -235,8 +241,11 @@ def train():
             for k,v in result.items():
                 writer.add_scalar(k, v, i)
             
-            num_samples = i * batches_per_epoch * args.batch_size
-            writer.add_scalar('MRS', result['mis'], num_samples)
+            num_samples += batches_per_epoch * args.batch_size
+            writer.add_scalar('val/NLL', result['nll'], num_samples)
+            writer.add_scalar('val/minADE', result['minADE'], num_samples)
+            writer.add_scalar('val/minFDE', result['minFDE'], num_samples)
+            writer.add_scalar('val/ES', result['es'], num_samples)
 
 
         valid_losses.append(float(valid_total_loss))
@@ -439,7 +448,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     de = {}
     minde = {}
     coverage = {}
-    mis = {}
+    es = {}
     nll = {}
 
     for k, v in prediction_gt.items():
@@ -452,10 +461,13 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         #    continue
         minde[k] = torch.min(allde, 0).values.numpy()
 
+        cov = v[0][:,2:].reshape(train_window,2,2)
+
         de[k] = torch.sqrt((v[0][:,0] - v[1][:,0])**2 + (v[0][:,1] - v[1][:,1])**2)
-        coverage[k] = get_coverage(v[0][:,:2], v[1], v[0][:,2:].reshape(train_window,2,2),sigma_ready=True) #pr_pos, gt_pos, pred_m, car_mask)
-        mis[k] = mis_loss(v[0][:,:2], v[1],v[0][:,2:].reshape(train_window,2,2),sigma_ready=True)
-        nll[k] = nll_dyna(v[0][:,:2], v[1],v[0][:,2:].reshape(train_window,2,2))
+        coverage[k] = get_coverage(v[0][:,:2], v[1], cov,sigma_ready=True) #pr_pos, gt_pos, pred_m, car_mask)
+        #mis[k] = mis_loss(v[0][:,:2], v[1],v[0][:,2:].reshape(train_window,2,2),sigma_ready=True)
+        nll[k] = nll_dyna(v[0][:,:2], v[1], cov)
+        es[k] = torch.norm(v[0][:,:2] - v[1], dim=-1) + torch.stack([torch.trace(c) for c in cov])
 
 
     ade = []
@@ -470,9 +482,12 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     for k, v in coverage.items():
         acoverage.append(np.mean(v.numpy()))
 
-    amis = []
-    for k, v in mis.items():
-        amis.append(np.mean(v.numpy()))
+    # amis = []
+    # for k, v in mis.items():
+    #     amis.append(np.mean(v.numpy()))
+    aes = []
+    for k, v in es.items():
+        aes.append(np.mean(v.numpy()))
 
     anll = []
     for k, v in nll.items():
@@ -485,8 +500,10 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     result['minFDE'] = np.mean(np.array(list(minde.values()))[:,-1])
     result['ADE_std'] = np.std(ade)
     result['coverage'] = np.mean(acoverage)
-    result['mis'] = np.mean(amis)
+    #result['mis'] = np.mean(amis)
     result['nll'] = np.mean(anll)
+    result['es'] = np.mean(aes)
+
 
     if train_window >= 29:
         de1s = []

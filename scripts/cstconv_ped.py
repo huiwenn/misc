@@ -43,8 +43,6 @@ parser.add_argument('--load_model_path', default='', type=str, help='path to mod
 parser.add_argument('--loss', default='nll', type=str, help='nll or ecco loss')
 parser.add_argument('--rotate', default=False, action='store_true')
 
-
-
 feature_parser = parser.add_mutually_exclusive_group(required=False)
 feature_parser.add_argument('--rho1', dest='representation', action='store_false')
 feature_parser.add_argument('--rho-reg', dest='representation', action='store_true')
@@ -374,6 +372,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     mis = {}
     minde = {}
     nll_d = {}
+    es = {}
 
     for k, v in prediction_gt.items():
         samples = v[3]
@@ -386,7 +385,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         coverage[k] = get_coverage(v[0][:,:2], v[1], v[2])
         mis[k] = mis_loss(v[0][:,:2], v[1], v[2])
         nll_d[k] = nll(v[0][:,:2], v[1], v[2])
-
+        es[k] = torch.norm(v[0][:,:2] - v[1], dim=-1) - torch.stack([torch.trace(c) for c in v[2]])
 
     ade = []
     for k, v in de.items():
@@ -401,6 +400,10 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     for k, v in mis.items():
         amis.append(np.mean(v.numpy()))
     
+    aes = []
+    for k, v in es.items():
+        aes.append(np.mean(v.numpy()))
+    
     anll = []
     for k, v in nll_d.items():
         anll.append(np.mean(v.numpy()))        
@@ -413,6 +416,8 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     result['coverage'] = np.mean(acoverage)
     result['mis'] = np.mean(amis)
     result['nll'] = np.mean(anll)
+    result['es'] = np.mean(aes)
+
     fdes = []
     for k, v in de.items():
         fdes.append(v.numpy()[-1])

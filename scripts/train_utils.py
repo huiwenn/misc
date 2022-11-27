@@ -1,4 +1,8 @@
 import torch
+import torch.nn as nn
+from torch.utils.data import IterableDataset, Dataset, DataLoader
+from typing import Any, Dict, List, Tuple, Union
+
 import gc
 import numpy as np
 
@@ -246,6 +250,106 @@ def normalize_input(tensor_dict, scale, train_window):
         tensor_dict[vk] = tensor_dict[vk] / scale
         
     return tensor_dict, max_pos
+
+class MyDataParallel(torch.nn.DataParallel):
+    """
+    Allow nn.DataParallel to call model's attributes.
+    """
+    def __getattr__(self, name):
+        try:
+            return super().__getattr__(name)
+        except AttributeError:
+            return getattr(self.module, name)
+
+
+def make_batch(feed, device='cuda', h=30):
+    '''
+    Data input batch processing for particles dataset
+    '''
+    batch = {}
+    
+    data, output = feed
+
+    data = data.permute(0,3,1,2).to(device)
+    output = output.permute(0,3,1,2).to(device)
+
+    batch['pos_2s'] = data[...,:h-1,:]
+    batch['vel_2s'] = data[...,1:,:] - data[...,:h-1,:]
+    batch['pos0'] = data[...,h-1,:]
+    batch['vel0'] = output[...,0,:]-data[...,h-1,:]
+    #print('pos_2s', batch['pos_2s'].shape, 'vel', batch['vel_2s'].shape)
+    
+    for i in range(19):
+        batch['pos'+str(i+1)] = output[:,:,i,:].to(device)
+    
+    accel = torch.zeros(data.shape[0], 1, 2).to(device)
+    batch['accel'] = accel
+    batch['car_mask'] = torch.ones(data.shape[0], 5, 1).to(device)
+
+    return batch
+
+def make_batch_ped(feed, device='cuda', h=30):
+    '''
+    Data input batch processing for particles dataset
+    '''
+    batch = {}
+    
+    data, output = feed
+
+    data = data.permute(0,3,1,2).to(device)
+    output = output.permute(0,3,1,2).to(device)
+
+    batch['pos_2s'] = data[...,:h-1,:]
+    batch['vel_2s'] = data[...,1:,:] - data[...,:h-1,:]
+    batch['pos0'] = data[...,h-1,:]
+    batch['vel0'] = output[...,0,:]-data[...,h-1,:]
+    #print('pos_2s', batch['pos_2s'].shape, 'vel', batch['vel_2s'].shape)
+    
+    pos_zero = torch.unsqueeze(torch.zeros(batch['pos0'].shape[:-1], device=device),-1)
+    batch['pos0'] = torch.cat([batch['pos0'], pos_zero], dim = -1)
+    batch['vel0'] = torch.cat([batch['vel0'], pos_zero], dim = -1)
+
+    zero_2s = torch.unsqueeze(torch.zeros(batch['pos_2s'].shape[:-1], device=device),-1)
+    batch['pos_2s'] = torch.cat([batch['pos_2s'], zero_2s], dim = -1)
+    batch['vel_2s'] = torch.cat([batch['vel_2s'], zero_2s], dim = -1)
+
+    for i in range(19):
+        batch['pos'+str(i+1)] = output[:,:,i,:].to(device)
+    
+    accel = torch.zeros(data.shape[0], 1, 3).to(device)
+    batch['accel'] = accel
+    batch['car_mask'] = torch.ones(data.shape[0], 5, 1).to(device)
+    batch['sigmas'] = torch.zeros(data.shape[0], 5, 2, 2).to(device) # for pecco change this back to 60, 2, 2
+
+    return batch
+
+
+
+class LSTMDataset(Dataset):
+    '''
+    Dataset class for particles dataset
+    '''
+    def __init__(self, data, obs_len=30, shuffle=True):
+   
+        wholetraj = data
+        self.obs_len= obs_len
+        # if need preprocessing here
+        normalized = wholetraj
+
+        self.input_data = normalized[:, :self.obs_len, :]
+        self.output_data = normalized[:, self.obs_len:, :]
+        self.data_size = self.input_data.shape[0]
+
+    def __len__(self):
+        return self.data_size
+
+    def __getitem__(self, idx: int
+                    ) -> Tuple[torch.FloatTensor, Any, Dict[str, np.ndarray]]:
+        return (
+            torch.FloatTensor(self.input_data[idx]),
+            torch.FloatTensor(
+                self.output_data[idx])
+        )
 
 def process_batch(batch, device, train_window = 30): 
     '''processing script for new dataset'''

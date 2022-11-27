@@ -104,12 +104,14 @@ class ParticlesNetwork(nn.Module):
 
         # compute the extent of the filters (the diameter) and the fluid features
         filter_extent = torch.tensor(self.filter_extent)
-        fluid_feats = [torch.ones_like(p[:,:, 0:1]), v]
+        fluid_feats = [torch.ones_like(p[:,:, 0:1]), v] 
+
         if not other_feats is None:
             fluid_feats.append(other_feats)
         fluid_feats = torch.cat(fluid_feats, -1)
 
         # compute the correction by accumulating the output through the network layers
+        #print('p', p.shape, 'fluid_feats', fluid_feats.shape, 'mask', fluid_mask.shape)
         output_conv_fluid = self.conv_fluid(p, p, fluid_feats, fluid_mask)
         output_dense_fluid = self.dense_forward(fluid_feats, self.dense_fluid)
 
@@ -149,6 +151,7 @@ class ParticlesNetwork(nn.Module):
 
         p0_enc, v0_enc, p0, v0, a, other_feats, fluid_mask = inputs
         other_feats = torch.flatten(other_feats, -2, -1)
+        
 
         if states is None:
             if other_feats is None:

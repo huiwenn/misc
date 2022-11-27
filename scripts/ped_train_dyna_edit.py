@@ -404,6 +404,7 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     coverage = {}
     mis = {}
     nll = {}
+    es = {}
 
     for k, v in prediction_gt.items():
         samples = v[3]
@@ -411,11 +412,13 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
         allde = torch.sqrt((samples[:,:,0] - gt_expand[:,:,0])**2 + (samples[:,:,1] - gt_expand[:,:,1])**2)
         minde[k] = torch.min(allde, 0).values.numpy()
 
+        cov = v[2].reshape(v[2].shape[0],2,2)
         de[k] = torch.sqrt((v[0][:,0] - v[1][:,0])**2 +
                            (v[0][:,1] - v[1][:,1])**2)
         coverage[k] = get_coverage(v[0][:,:2], v[1], v[2], sigma_ready=True)
         mis[k] = mis_loss(v[0][:,:2], v[1], v[2], sigma_ready=True)
-        nll[k] = nll_dyna(v[0][:,:2], v[1], v[2].reshape(v[2].shape[0],2,2))
+        nll[k] = nll_dyna(v[0][:,:2], v[1], cov)
+        es[k] = torch.norm(v[0][:,:2] - v[1], dim=-1) - torch.stack([torch.trace(c) for c in cov])
 
 
     ade = []
@@ -429,6 +432,9 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     acoverage = []
     for k, v in coverage.items():
         acoverage.append(np.mean(v.numpy()))
+    aes = []
+    for k, v in es.items():
+        aes.append(np.mean(v.numpy()))
 
     amis = []
     for k, v in mis.items():
@@ -447,6 +453,8 @@ def evaluate(model, val_dataset, loss_f, use_lane=False,
     result['coverage'] = np.mean(acoverage)
     result['mis'] = np.mean(amis)
     result['nll'] = np.mean(anll)
+    result['es'] = np.mean(aes)
+
 
     fdes = []
     for k, v in de.items():

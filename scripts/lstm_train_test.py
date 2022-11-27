@@ -500,6 +500,7 @@ def validate(
     sample_de_all =[]
     nll = []
     mis = []
+    es = []
     cov = []
     cov_1s = []
     cov_2s = []
@@ -549,6 +550,7 @@ def validate(
         miss = []
         covv = []
         nlls = []
+        ess = []
         for di in range(rollout_len):
             decoder_output, decoder_hidden = decoder(decoder_input,
                                                      decoder_hidden)
@@ -579,6 +581,9 @@ def validate(
             nlls.append(nll_loss_2(output[:, :5], target[:, di, :2]).detach().cpu().numpy())
             miss.append(quantile_loss(output[:, :5], target[:, di, :2]).detach().cpu().numpy())
             covv.append(get_coverage(output[:, :5], target[:, di, :2]).detach().cpu().numpy())
+            es_ = torch.norm(output[:, :2] - target[:, di, :2], dim=-1)
+            es_ += -1 *(torch.pow(output[:, 2],2) + torch.pow(output[:, 3],2))
+            ess.append(es_.detach().cpu().numpy())
             # Use own predictions as inputs at next step
         
         # Get average loss for pred_len
@@ -597,6 +602,7 @@ def validate(
             cov_3s = np.concatenate([cov_3s,covv[29]])
         nll.append(np.mean(nlls))
         mis.append(np.mean(miss))
+        es.append(np.mean(ess))
         cov.append(np.mean(covv))
 
 
@@ -610,13 +616,15 @@ def validate(
     cov1s = np.mean(cov_1s)
     cov2s = np.mean(cov_2s)
     cov3s = np.mean(cov_3s)
+    es = np.mean(es)
+
     sample_de_all = np.array(sample_de_all[:-1])
     #print('sample_de_al', sample_de_all.shape)
     #print('min shape', np.min(sample_de_all, axis=2).shape)
     minade = np.mean(np.min(sample_de_all, axis=2))
     minfde = np.mean(np.min(sample_de_all[:,-1,:,:],axis=1))
     cprint(
-        f"Val -- Epoch:{epoch}, loss:{val_loss}, ade:{ade}, fde:{fde}, mis:{mrs}, \
+        f"Val -- Epoch:{epoch}, loss:{val_loss}, ade:{ade}, fde:{fde}, mis:{mrs}, es:{es} \
         cov:{cov}, 1s:{cov1s}, 2s:{cov2s}, 3s:{cov3s}, nll:{nll}, minade:{minade}, minfde:{minfde}, Rollout: {rollout_len}",
         color="green",
     )
